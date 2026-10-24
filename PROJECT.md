@@ -296,7 +296,7 @@ Parallel groups run in order. Tasks within a group can run at the same time. Eac
 
 ### Group F (parallel)
 
-- [ ] **10. Save/load** — files: `src/save/save.js`, `tests/save.test.js`
+- [x] **10. Save/load** — files: `src/save/save.js`, `tests/save.test.js`
   - Per section 7: serialize/deserialize edits + player state, autosave hooks, "New World" support, crash-safe parsing.
   - Acceptance: save tests pass; manager-wired game restores position and edited blocks after a page reload (log in `MANUAL_CHECKS.md`).
 

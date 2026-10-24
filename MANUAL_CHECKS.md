@@ -24,3 +24,5 @@ These need a human to verify by running the game; they are not covered by automa
 - [ ] Layout holds in narrow and short windows (the hotbar scales down; the pause menu scrolls if needed) (Task 8).
 - [ ] Day/night (a full cycle takes 10 minutes; to skip ahead in dev, run `__game.setTimeOfDay(0.74)` in the console): the sun rises in the east and sets in the west with an orange-pink sky (judge whether the sunset tint is too strong); night is dark blue with stars and a cratered moon; terrain dims at night; hills hide the sun and moon (Task 9).
 - [ ] Underwater: blue-green, short fog under water that clears when surfacing (Task 9).
+- [ ] Save/reload: break and place a few blocks (including on a chunk border), walk somewhere, wait 10 s or just reload: position, view direction, hotbar slot, time of day and every edit are restored. Walk far away and come back: edits are still there after their chunks reload (Task 10; the manager confirmed a reload round trip headless).
+- [ ] New World: pause → New World → Yes starts a different world, and reloading doesn't bring the old one back (Task 10).

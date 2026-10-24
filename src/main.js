@@ -1,14 +1,15 @@
 // Boot + game loop + wiring (PROJECT.md section 4: manager / integration tasks only).
 //
 // Sections:
-//   1. Seed
+//   1. Seed and save (restore)
 //   2. Renderer, atlas, chunk meshes, sky, world
-//   3. Spawn: generate + mesh the spawn area synchronously before the first frame
+//   3. Spawn: generate + mesh the start area synchronously before the first frame
 //   4. Controls + player
 //   5. HUD (crosshair + pause menu), hotbar, debug overlay
 //   6. Block targeting + editing
-//   7. Game loop (fixed frame order)
-//   8. Dev-only automation hook
+//   7. Save: autosave + "New World"
+//   8. Game loop (fixed frame order)
+//   9. Dev-only automation hook
 //
 // Frame order: dt -> input/player -> hotbar/F3 -> target + edits -> world streaming ->
 // unload meshes -> mesh budget -> sky -> debug stats -> render.
@@ -34,24 +35,31 @@ import { performAction } from './player/interaction.js';
 import { createHud } from './ui/hud.js';
 import { createHotbar } from './ui/hotbar.js';
 import { createDebugOverlay, createFrameStats } from './ui/debug.js';
+import { loadGame, clearSave, createAutosaver } from './save/save.js';
 
-// ---- 1. Seed -----------------------------------------------------------------
-// `?seed=<int>` in the URL, otherwise a random 31-bit int. (Save/load, Task 10, will supply it.)
+// ---- 1. Seed and save -----------------------------------------------------------
+// A valid save is restored. A `?seed=<int>` URL param that differs from the saved seed starts a
+// fresh world with that seed (the old save is overwritten at the next autosave); a matching one
+// restores the save, so reloading after "New World" (which leaves ?seed= in the URL) keeps progress.
+// With neither, the seed is a random 31-bit int.
 
 function randomSeed() {
   return Math.floor(Math.random() * 0x80000000);
 }
 
-function readSeed() {
+function readUrlSeed() {
   const param = new URLSearchParams(window.location.search).get('seed');
   if (param !== null && /^\s*-?\d+\s*$/.test(param)) {
     const n = Number.parseInt(param, 10);
     if (Number.isSafeInteger(n)) return n;
   }
-  return randomSeed();
+  return null;
 }
 
-const seed = readSeed();
+const urlSeed = readUrlSeed();
+let save = loadGame();
+if (save && urlSeed !== null && urlSeed !== save.seed) save = null;
+const seed = save ? save.seed : (urlSeed ?? randomSeed());
 
 // ---- 2. Renderer, atlas, chunk meshes, sky, world -------------------------------
 
@@ -60,7 +68,8 @@ const atlas = createAtlas();
 const chunkMeshes = createChunkMeshes(scene, atlas.texture);
 const sky = createSky(scene);
 const world = new World(seed);
-let timeOfDay = DAY_START_TIME;
+if (save) world.applyEdits(save.edits); // before any generation, so chunks generate with edits applied
+let timeOfDay = save ? save.timeOfDay : DAY_START_TIME;
 
 // Created once; the mesher calls it ~20k times per chunk.
 const getBlock = (x, y, z) => world.getBlock(x, y, z);
@@ -73,31 +82,38 @@ function meshChunks(chunks) {
 }
 
 // ---- 3. Spawn ---------------------------------------------------------------------
+// Generate and mesh around the saved position (or the spawn point) before the first frame.
 
 const spawn = findSpawn(world);
-world.generateAround(spawn.x, spawn.z, GEN_DISTANCE);
+const savedPlayer = save ? save.player : null; // null when the save had no usable position
+world.generateAround(savedPlayer ? savedPlayer.x : spawn.x, savedPlayer ? savedPlayer.z : spawn.z, GEN_DISTANCE);
 meshChunks(world.consumeDirtyChunks());
-const spawnY = world.heightAt(spawn.x, spawn.z) + 2; // feet 2 blocks above the top solid block
+// Feet 2 blocks above the top solid block. A restored player far from spawn may not have the spawn
+// chunk loaded (heightAt -1), so fall back to the terrain height there.
+const spawnTop = world.heightAt(spawn.x, spawn.z);
+const spawnY = (spawnTop >= 0 ? spawnTop : world.terrain.surfaceHeight(Math.floor(spawn.x), Math.floor(spawn.z))) + 2;
 
 // ---- 4. Controls + player -----------------------------------------------------------
 
 const controls = createControls(renderer.domElement);
 const player = createPlayer({ camera, world, controls });
 player.setSpawn(spawn.x, spawnY, spawn.z);
-player.teleport(spawn.x, spawnY, spawn.z);
+if (savedPlayer) {
+  player.teleport(savedPlayer.x, savedPlayer.y, savedPlayer.z);
+  player.setLook(savedPlayer.yaw, savedPlayer.pitch);
+  player.state.flying = savedPlayer.flying;
+} else {
+  player.teleport(spawn.x, spawnY, spawn.z);
+}
 
 // ---- 5. HUD, hotbar, debug overlay ----------------------------------------------------
-
-function startNewWorld() {
-  // Until save/load (Task 10) is wired: reload into a fresh random seed.
-  window.location.assign(`${window.location.pathname}?seed=${randomSeed()}`);
-}
 
 const hud = createHud(document.body, {
   onResume: () => controls.requestLock(),
   onNewWorld: startNewWorld,
 });
 const hotbar = createHotbar(document.body, { atlasCanvas: atlas.canvas, blocks: HOTBAR_BLOCKS });
+if (save) hotbar.setSelectedIndex(save.hotbarIndex);
 const debug = createDebugOverlay(document.body);
 const frameStats = createFrameStats();
 
@@ -130,7 +146,7 @@ function updateStats() {
 }
 
 let paused = true;
-let forcePlay = false; // dev automation only (section 8)
+let forcePlay = false; // dev automation only (section 9)
 
 function setPaused(p) {
   if (p === paused) return;
@@ -151,7 +167,29 @@ function queryTarget() {
   return raycast(getBlock, p.x, p.y, p.z, lookDir.x, lookDir.y, lookDir.z, REACH, targetHit);
 }
 
-// ---- 7. Game loop ----------------------------------------------------------------------
+// ---- 7. Save: autosave every 10 s and on beforeunload; "New World" -----------------------
+
+const autosaver = createAutosaver({
+  collect() {
+    const s = player.state;
+    return {
+      seed,
+      player: { x: s.x, y: s.y, z: s.z, yaw: player.yaw, pitch: player.pitch, flying: s.flying },
+      hotbarIndex: hotbar.getSelectedIndex(),
+      timeOfDay,
+      edits: world.getEdits(),
+    };
+  },
+});
+autosaver.start();
+
+function startNewWorld() {
+  autosaver.stop(); // also removes the beforeunload save, so the old world isn't re-saved on unload
+  clearSave();
+  window.location.assign(`${window.location.pathname}?seed=${randomSeed()}`);
+}
+
+// ---- 8. Game loop ----------------------------------------------------------------------
 
 const timer = new THREE.Timer();
 timer.connect(document); // Page Visibility API: no huge dt after a tab switch
@@ -211,13 +249,13 @@ function frame(time) {
 
 renderer.setAnimationLoop(frame);
 
-// ---- 8. Dev-only automation hook -----------------------------------------------------------
+// ---- 9. Dev-only automation hook -----------------------------------------------------------
 // Pointer lock can't be used headless. setForcePlay(true) runs the game unpaused without a lock,
 // so synthetic key (and mouse) events drive the player. Stripped from production builds.
 
 if (import.meta.env.DEV) {
   window.__game = {
-    world, player, controls, renderer, scene, camera, chunkMeshes, sky, hotbar, debug, seed,
+    world, player, controls, renderer, scene, camera, chunkMeshes, sky, hotbar, debug, seed, autosaver,
     getTimeOfDay: () => timeOfDay,
     setTimeOfDay(t) { timeOfDay = ((t % 1) + 1) % 1; },
     getTarget: () => (paused ? null : queryTarget()),

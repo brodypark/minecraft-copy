@@ -2,7 +2,7 @@
   "manager": {
     "name": "Manager",
     "status": "working",
-    "task": "Wiring Group E (raycast, HUD, sky) into main.js"
+    "task": "Group F: Save + Polish in parallel"
   },
   "agents": [
     {
@@ -21,14 +21,14 @@
       "task": "Task 9 verified: day/night, underwater in game"
     },
     {
-      "name": "Physics",
+      "name": "Save",
       "status": "done",
-      "task": "Task 4 verified: 43 physics tests pass"
+      "task": "Task 10 verified: reload restores pos + edits"
     },
     {
-      "name": "Mesher",
-      "status": "done",
-      "task": "Task 5 verified: 26 tests, terrain renders"
+      "name": "Polish",
+      "status": "working",
+      "task": "Task 11: resumed after interruption"
     },
     {
       "name": "Player",
