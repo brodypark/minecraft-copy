@@ -2,6 +2,11 @@
 // into three.js meshes, keeps one solid + one water mesh per chunk key, and disposes
 // geometry when a chunk is replaced or removed.
 //
+// Allocation policy: a remesh necessarily creates one BufferGeometry (plus its attributes and
+// bounds) per non-empty group and disposes the one it replaces. Everything else is reused: a
+// chunk keeps its Mesh objects and its bookkeeping entry across remeshes, and the sRGB -> linear
+// conversion goes through a fixed-size cache instead of allocating.
+//
 // Color management: three treats vertex colors as linear while the atlas texture is
 // sRGB, so the mesher's gray shading values (spec values, e.g. 0.5 for bottom faces)
 // would come out much brighter on screen. setChunk converts them from sRGB to linear
@@ -13,6 +18,26 @@ import { CHUNK_SIZE } from '../config.js';
 
 const _color = new THREE.Color();
 
+// sRGB -> linear cache. The mesher emits only a few dozen distinct gray levels (face shade times
+// AO factor), so each value is converted once and then looked up. Slots are picked by quantizing
+// the value; a slot keeps the exact float32 input it was computed for, so the result is always
+// exact (a collision just recomputes and takes over the slot). Module-level and fixed-size, so a
+// remesh allocates nothing here besides the output array three.js needs.
+const LUT_SIZE = 1024;
+const lutIn = new Float32Array(LUT_SIZE).fill(NaN); // NaN never equals an input, so empty slots miss
+const lutOut = new Float32Array(LUT_SIZE);
+
+function srgbToLinearCached(c) {
+  let slot = (c * (LUT_SIZE - 1) + 0.5) | 0;
+  if (slot < 0) slot = 0;
+  else if (slot >= LUT_SIZE) slot = LUT_SIZE - 1;
+  if (lutIn[slot] === c) return lutOut[slot];
+  const out = _color.setRGB(c, c, c, THREE.SRGBColorSpace).r;
+  lutIn[slot] = c;
+  lutOut[slot] = out;
+  return out;
+}
+
 /** New Float32Array with each value converted sRGB -> linear (three's working space). */
 function colorsToLinear(src) {
   const out = new Float32Array(src.length);
@@ -21,9 +46,9 @@ function colorsToLinear(src) {
   for (let i = 0; i < src.length; i++) {
     const c = src[i];
     if (c !== lastIn) {
-      // Faces repeat the same few gray levels, so a one-entry memo skips most conversions.
+      // r = g = b per vertex, so a one-entry memo skips two of every three lookups.
       lastIn = c;
-      lastOut = _color.setRGB(c, c, c, THREE.SRGBColorSpace).r;
+      lastOut = srgbToLinearCached(c);
     }
     out[i] = lastOut;
   }
@@ -47,25 +72,46 @@ export function createChunkMeshes(scene, texture) {
     side: THREE.DoubleSide,
   });
 
-  /** @type {Map<string, { solid: THREE.Mesh|null, water: THREE.Mesh|null, triangles: number }>} */
+  /** @type {Map<string, { cx: number, cz: number, solid: THREE.Mesh|null, water: THREE.Mesh|null, triangles: number }>} */
   const entries = new Map();
   let triangles = 0;
 
-  function buildMesh(group, material, cx, cz) {
-    if (!group || group.indices.length === 0) return null;
+  /** New geometry for a non-empty mesher group (chunk-local positions, cull-ready bounds). */
+  function buildGeometry(group) {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(group.positions, 3));
     geometry.setAttribute('uv', new THREE.BufferAttribute(group.uvs, 2));
     geometry.setAttribute('color', new THREE.BufferAttribute(colorsToLinear(group.colors), 3));
     geometry.setIndex(new THREE.BufferAttribute(group.indices, 1));
-    geometry.computeBoundingSphere();
     geometry.computeBoundingBox();
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(cx * CHUNK_SIZE, 0, cz * CHUNK_SIZE);
-    mesh.matrixAutoUpdate = false;
-    mesh.updateMatrix();
-    scene.add(mesh);
-    return mesh;
+    geometry.computeBoundingSphere();
+    return geometry;
+  }
+
+  /**
+   * Point `mesh` (or null) at `group`'s geometry and return the mesh to keep: the old geometry is
+   * disposed, an existing mesh is reused, a mesh is created only when needed, and an empty group
+   * removes the mesh from the scene.
+   */
+  function updateMesh(mesh, group, material, cx, cz) {
+    const empty = !group || group.indices.length === 0;
+    if (mesh !== null) {
+      mesh.geometry.dispose();
+      if (empty) {
+        scene.remove(mesh);
+        return null;
+      }
+      mesh.geometry = buildGeometry(group);
+      return mesh;
+    }
+    if (empty) return null;
+    const created = new THREE.Mesh(buildGeometry(group), material);
+    created.position.set(cx * CHUNK_SIZE, 0, cz * CHUNK_SIZE);
+    created.matrixAutoUpdate = false;
+    created.updateMatrix();
+    if (material === waterMaterial) created.renderOrder = 1; // after solid geometry
+    scene.add(created);
+    return created;
   }
 
   function dropMesh(mesh) {
@@ -75,7 +121,7 @@ export function createChunkMeshes(scene, texture) {
   }
 
   /**
-   * Show the geometry for chunk `key`, replacing (and disposing) any meshes it had.
+   * Show the geometry for chunk `key`, replacing (and disposing) any geometry it had.
    * The typed arrays in `data` are handed to three.js; don't modify them afterwards.
    * Empty groups get no mesh. After this call has(key) is true even if both groups were empty.
    * @param {string} key chunk key `${cx},${cz}`
@@ -84,13 +130,20 @@ export function createChunkMeshes(scene, texture) {
    * @param {{ solid: object, water: object }} data buildChunkGeometry(...) output
    */
   function setChunk(key, cx, cz, data) {
-    removeChunk(key);
-    const solid = buildMesh(data.solid, solidMaterial, cx, cz);
-    const water = buildMesh(data.water, waterMaterial, cx, cz);
-    if (water !== null) water.renderOrder = 1; // after solid geometry
+    let entry = entries.get(key);
+    if (entry !== undefined && (entry.cx !== cx || entry.cz !== cz)) {
+      removeChunk(key); // same key, different position: start over
+      entry = undefined;
+    }
+    if (entry === undefined) {
+      entry = { cx, cz, solid: null, water: null, triangles: 0 };
+      entries.set(key, entry);
+    }
+    entry.solid = updateMesh(entry.solid, data.solid, solidMaterial, cx, cz);
+    entry.water = updateMesh(entry.water, data.water, waterMaterial, cx, cz);
     const tris = (data.solid.indices.length + data.water.indices.length) / 3;
-    entries.set(key, { solid, water, triangles: tris });
-    triangles += tris;
+    triangles += tris - entry.triangles;
+    entry.triangles = tris;
   }
 
   /**

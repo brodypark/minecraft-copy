@@ -27,8 +27,8 @@
     },
     {
       "name": "Polish",
-      "status": "working",
-      "task": "Task 11: resumed after interruption"
+      "status": "done",
+      "task": "Task 11 verified: AO, caves, memory bounded"
     },
     {
       "name": "Player",

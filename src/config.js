@@ -93,3 +93,22 @@ export const STAR_FADE_HIGH = 0;              // sun elevation above which stars
 export const UNDERWATER_FOG_COLOR = 0x1a5a6a; // sRGB deep blue-green, multiplied by brightness (dark at night)
 export const UNDERWATER_FOG_NEAR = 0.5;       // blocks
 export const UNDERWATER_FOG_FAR = 14;         // blocks
+
+// Polish (Task 11). Ambient occlusion is used by src/render/mesher.js, caves by src/world/terrain.js.
+// AO level per face vertex = 3 - (side1 + side2 + corner), or 0 when both sides are occluders (classic
+// 3-neighbor rule; only opaque blocks occlude). The level picks a brightness factor that multiplies the
+// per-face shade. Values are sRGB grays like the face shades (chunkMeshes converts them to linear).
+export const AO_FACTORS = [0.5, 0.65, 0.82, 1.0]; // index = AO level 0 (darkest) .. 3 (open)
+// Caves: carve AIR where noise3D(x / XZ_SCALE, y / Y_SCALE, z / XZ_SCALE) > CAVE_THRESHOLD, only for
+// CAVE_MIN_Y <= y <= min(own surface, 4 neighbor surfaces) - CAVE_SURFACE_GAP. The gap keeps at least
+// 4 solid blocks above every cave cell and keeps caves away from water columns at the side, so caves
+// never open to the sky and never touch WATER. Within CAVE_TAPER blocks of those limits the threshold
+// rises by CAVE_TAPER_STEP per block, which rounds off floors and ceilings instead of cutting them flat.
+export const CAVES_ENABLED = true;
+export const CAVE_XZ_SCALE = 28;          // blocks per noise unit horizontally
+export const CAVE_Y_SCALE = 14;           // blocks per noise unit vertically (flatter, wider caves)
+export const CAVE_THRESHOLD = 0.62;       // higher = sparser caves
+export const CAVE_MIN_Y = 5;
+export const CAVE_SURFACE_GAP = 5;        // cave cells satisfy y <= surface - 5 (own and 4 neighbor columns)
+export const CAVE_TAPER = 3;              // blocks
+export const CAVE_TAPER_STEP = 0.08;      // threshold increase per block of taper

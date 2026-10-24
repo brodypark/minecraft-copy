@@ -1,5 +1,12 @@
 // World: loaded chunk map, block get/set, player edits, streaming and remesh bookkeeping
 // (PROJECT.md sections 5.4 and 7). Pure module: no three.js.
+//
+// Per-frame cost: update(), consumeUnloadedChunks(), consumeDirtyChunks() and pendingMeshCount()
+// allocate nothing when nothing changed since the previous frame. A version counter is bumped by
+// every change that can affect the mesh queue (chunk loaded/unloaded, dirty/urgent marks, focus
+// moved), so idle frames skip the dirty-set scan entirely. The arrays returned by
+// consumeDirtyChunks() and consumeUnloadedChunks() are reused: each is valid only until the next
+// call of the same method.
 
 import {
   CHUNK_SIZE, WORLD_HEIGHT, RENDER_DISTANCE, GEN_DISTANCE, UNLOAD_DISTANCE, CHUNK_GEN_PER_FRAME,
@@ -65,6 +72,8 @@ export class World {
     this._urgent = new Set();
     /** @type {string[]} keys of chunks unloaded since the last consumeUnloadedChunks() */
     this._unloaded = [];
+    /** @type {string[]} the other buffer of the consumeUnloadedChunks() double buffer */
+    this._unloadedSpare = [];
 
     // getBlock cache: last chunk looked up.
     this._lastChunk = null;
@@ -75,7 +84,14 @@ export class World {
     this._focusCz = 0;
     this._genCursor = 0;
 
-    this._candidates = []; // scratch for consumeDirtyChunks
+    // Mesh-queue bookkeeping (see the header comment).
+    this._version = 0; // bumped by every change that can alter the mesh queue
+    this._idleVersion = -1; // version at which consumeDirtyChunks last found nothing eligible
+    this._pendingVersion = -1; // version at which _pendingCount was computed
+    this._pendingCount = 0;
+    this._result = []; // reused return value of consumeDirtyChunks
+    this._candidates = []; // scratch for consumeDirtyChunks, kept sorted nearest first
+    this._far = []; // scratch for _setFocus
   }
 
   // ---- Lookup -------------------------------------------------------------
@@ -293,6 +309,7 @@ export class World {
     if (clash !== undefined) this._unloadChunk(clash); // 32768 chunks away; see numKey
     this._chunks.set(nk, chunk);
     this._dirty.add(chunk);
+    this._version++;
     return chunk;
   }
 
@@ -358,97 +375,123 @@ export class World {
    * chunk and its 4 horizontal neighbors have data. Urgent (edited) chunks come first and ignore
    * `limit` and distance; the rest must be within RENDER_DISTANCE (circular) of the streaming focus
    * and are capped at `limit`, nearest first. Non-meshable chunks stay queued.
+   *
+   * The returned array is reused: it is only valid until the next consumeDirtyChunks() call. Allocates
+   * nothing, and returns immediately when nothing changed since a call that found no eligible chunk.
    * @param {number} [limit=Infinity]
    * @returns {Chunk[]}
    */
   consumeDirtyChunks(limit = Infinity) {
-    const result = [];
-    if (this._dirty.size === 0) return result;
+    const result = this._result;
+    result.length = 0;
+    if (this._dirty.size === 0 || this._version === this._idleVersion) return result;
     const cands = this._candidates;
     cands.length = 0;
-    const fx = this._focusCx;
-    const fz = this._focusCz;
+    const max = limit > 0 ? limit : 0;
+    let eligible = 0;
     for (const chunk of this._dirty) {
       if (!this._isMeshable(chunk)) continue;
       if (this._urgent.has(chunk)) {
         result.push(chunk);
         continue;
       }
-      if (this._hasFocus) {
-        const dx = chunk.cx - fx;
-        const dz = chunk.cz - fz;
-        if (dx * dx + dz * dz > RENDER_SQ) continue;
+      const dist = this._dist(chunk); // from chunk (0,0) until a focus is set, as before
+      if (this._hasFocus && dist > RENDER_SQ) continue;
+      eligible++;
+      // Keep the `max` nearest in `cands`, sorted by distance (stable: ties keep dirty-set order).
+      // Insertion instead of sort(): no comparator closure, and max is tiny per frame.
+      if (max === 0 || (cands.length >= max && this._dist(cands[cands.length - 1]) <= dist)) continue;
+      let j = cands.length < max ? cands.length : cands.length - 1;
+      while (j > 0 && this._dist(cands[j - 1]) > dist) {
+        cands[j] = cands[j - 1];
+        j--;
       }
-      cands.push(chunk);
+      cands[j] = chunk;
     }
-    for (const chunk of result) {
-      this._dirty.delete(chunk);
-      this._urgent.delete(chunk);
+    if (result.length === 0 && eligible === 0) {
+      // Nothing can come out until something changes (load/unload, dirty mark, focus move).
+      this._idleVersion = this._version;
+      return result;
     }
-    const n = Math.min(cands.length, limit > 0 ? limit : 0);
-    if (n > 0) {
-      if (cands.length > 1) {
-        cands.sort((a, b) => {
-          const da = (a.cx - fx) * (a.cx - fx) + (a.cz - fz) * (a.cz - fz);
-          const db = (b.cx - fx) * (b.cx - fx) + (b.cz - fz) * (b.cz - fz);
-          return da - db;
-        });
-      }
-      for (let i = 0; i < n; i++) {
-        result.push(cands[i]);
-        this._dirty.delete(cands[i]);
-      }
+    for (let i = 0; i < result.length; i++) {
+      this._dirty.delete(result[i]);
+      this._urgent.delete(result[i]);
+    }
+    for (let i = 0; i < cands.length; i++) {
+      result.push(cands[i]);
+      this._dirty.delete(cands[i]);
     }
     cands.length = 0;
+    if (result.length > 0) this._version++;
     return result;
   }
 
   /**
    * Number of dirty chunks waiting for a mesh that will be meshed from the current position
-   * (urgent ones, or within RENDER_DISTANCE of the focus). For the debug overlay.
+   * (urgent ones, or within RENDER_DISTANCE of the focus). For the debug overlay. Cached until the
+   * queue changes, so calling it every frame costs nothing.
    * @returns {number}
    */
   pendingMeshCount() {
-    if (!this._hasFocus) return this._dirty.size;
+    if (this._pendingVersion === this._version) return this._pendingCount;
     let n = 0;
-    for (const chunk of this._dirty) {
-      const dx = chunk.cx - this._focusCx;
-      const dz = chunk.cz - this._focusCz;
-      if (dx * dx + dz * dz <= RENDER_SQ || this._urgent.has(chunk)) n++;
+    if (!this._hasFocus) {
+      n = this._dirty.size;
+    } else {
+      for (const chunk of this._dirty) {
+        if (this._dist(chunk) <= RENDER_SQ || this._urgent.has(chunk)) n++;
+      }
     }
+    this._pendingCount = n;
+    this._pendingVersion = this._version;
     return n;
   }
 
   /**
    * Keys (`cx,cz`) of chunks unloaded since the last call, so the renderer can dispose their meshes.
+   * The returned array is reused (double buffer): it is only valid until the next call. No allocation.
    * @returns {string[]}
    */
   consumeUnloadedChunks() {
     const out = this._unloaded;
-    this._unloaded = [];
+    if (out.length === 0) return out;
+    const next = this._unloadedSpare;
+    next.length = 0;
+    this._unloaded = next;
+    this._unloadedSpare = out;
     return out;
   }
 
   // ---- Internals ------------------------------------------------------------
 
+  /** Squared chunk distance from the streaming focus. */
+  _dist(chunk) {
+    const dx = chunk.cx - this._focusCx;
+    const dz = chunk.cz - this._focusCz;
+    return dx * dx + dz * dz;
+  }
+
   _isMeshable(chunk) {
-    const { cx, cz } = chunk;
+    const cx = chunk.cx;
+    const cz = chunk.cz;
     return this.hasChunkData(cx - 1, cz) && this.hasChunkData(cx + 1, cz)
       && this.hasChunkData(cx, cz - 1) && this.hasChunkData(cx, cz + 1);
   }
 
   _markDirty(chunk) {
     this._dirty.add(chunk);
+    this._version++;
   }
 
   _markDirtyAt(cx, cz) {
     const chunk = this.getChunk(cx, cz);
-    if (chunk !== undefined) this._dirty.add(chunk);
+    if (chunk !== undefined) this._markDirty(chunk);
   }
 
   _markUrgent(chunk) {
     this._dirty.add(chunk);
     this._urgent.add(chunk);
+    this._version++;
   }
 
   _markUrgentAt(cx, cz) {
@@ -462,13 +505,16 @@ export class World {
     this._focusCx = pcx;
     this._focusCz = pcz;
     this._genCursor = 0;
-    const far = [];
+    this._version++;
+    const far = this._far;
+    far.length = 0;
     for (const chunk of this._chunks.values()) {
       const dx = chunk.cx - pcx;
       const dz = chunk.cz - pcz;
       if (dx * dx + dz * dz > UNLOAD_SQ) far.push(chunk);
     }
-    for (const chunk of far) this._unloadChunk(chunk);
+    for (let i = 0; i < far.length; i++) this._unloadChunk(far[i]);
+    far.length = 0;
   }
 
   _unloadChunk(chunk) {
@@ -479,5 +525,6 @@ export class World {
     this._urgent.delete(chunk);
     if (this._lastChunk === chunk) this._lastChunk = null;
     this._unloaded.push(chunk.key);
+    this._version++;
   }
 }

@@ -300,7 +300,7 @@ Parallel groups run in order. Tasks within a group can run at the same time. Eac
   - Per section 7: serialize/deserialize edits + player state, autosave hooks, "New World" support, crash-safe parsing.
   - Acceptance: save tests pass; manager-wired game restores position and edited blocks after a page reload (log in `MANUAL_CHECKS.md`).
 
-- [ ] **11. Polish and performance** — files: `src/render/mesher.js`, `src/render/chunkMeshes.js`, `src/world/terrain.js`, `src/world/world.js` (coordinate with Task 10 via the manager; no overlapping edits)
+- [x] **11. Polish and performance** — files: `src/render/mesher.js`, `src/render/chunkMeshes.js`, `src/world/terrain.js`, `src/world/world.js` (coordinate with Task 10 via the manager; no overlapping edits)
   - Baked ambient occlusion per vertex (fix the quad-flip artifact by choosing the diagonal based on AO values).
   - Reuse typed arrays and vectors in hot paths; no per-frame allocations in the main loop.
   - Optional caves (section 6).

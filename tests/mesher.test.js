@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { CHUNK_SIZE, WORLD_HEIGHT } from '../src/config.js';
+import { CHUNK_SIZE, WORLD_HEIGHT, RENDER_DISTANCE, GEN_DISTANCE, AO_FACTORS } from '../src/config.js';
 import { B, BLOCKS, isTransparent } from '../src/blocks.js';
 import { TILES, tileUV } from '../src/render/tiles.js';
 import { buildChunkGeometry } from '../src/render/mesher.js';
@@ -104,6 +104,49 @@ function referenceFaces(getBlock, cx, cz) {
     }
   }
   return { solid, water };
+}
+
+/**
+ * Reference AO level (0..3) for vertex `v` (chunk-local position) of a face of block `cell`
+ * (chunk-local) facing `dir`, straight from the classic rule: opaque side/corner cells in the layer
+ * in front of the face.
+ */
+function refAoLevel(getBlock, cx, cz, cell, dir, v) {
+  const n = DIRS[dir];
+  const axis = n.findIndex((c) => c !== 0);
+  const [t1, t2] = [0, 1, 2].filter((a) => a !== axis);
+  const front = [cell[0] + n[0], cell[1] + n[1], cell[2] + n[2]];
+  const step = (a) => (v[a] - cell[a] === 1 ? 1 : -1);
+  const at = (p) => {
+    const y = p[1];
+    const id = y < 0 || y >= WORLD_HEIGHT ? B.AIR : getBlock(p[0] + cx * CS, y, p[2] + cz * CS);
+    return isTransparent(id) ? 0 : 1;
+  };
+  const p1 = [...front];
+  p1[t1] += step(t1);
+  const p2 = [...front];
+  p2[t2] += step(t2);
+  const pc = [...p1];
+  pc[t2] += step(t2);
+  const s1 = at(p1);
+  const s2 = at(p2);
+  return s1 && s2 ? 0 : 3 - (s1 + s2 + at(pc));
+}
+
+/**
+ * Quads of a group (4 consecutive vertices each) with their vertex ids, which diagonal the two
+ * triangles share (as a sorted pair of quad-local corner numbers), and both triangles.
+ */
+function quads(group) {
+  const I = group.indices;
+  const out = [];
+  for (let f = 0; f < I.length / 6; f++) {
+    const a = [I[f * 6], I[f * 6 + 1], I[f * 6 + 2]];
+    const b = [I[f * 6 + 3], I[f * 6 + 4], I[f * 6 + 5]];
+    const shared = a.filter((i) => b.includes(i)).map((i) => i - f * 4).sort();
+    out.push({ base: f * 4, shared: shared.join('-') });
+  }
+  return out;
 }
 
 const srgbToLinear = (c) => (c < 0.04045 ? c * 0.0773993808 : Math.pow(c * 0.9478672986 + 0.0521327014, 2.4));
@@ -268,9 +311,46 @@ describe('mesher vertex data', () => {
     expect(seen.size).toBe(6);
   });
 
+  it('winds counter-clockwise for both quad diagonals (AO flips) on all 6 faces', () => {
+    // One opaque block diagonal to each corner of each face in turn: the corner cell darkens exactly
+    // one vertex of that face, which flips the diagonal for two of its four corners.
+    const seenDiagonals = new Set();
+    for (const [name, n] of Object.entries(DIRS)) {
+      const axis = n.findIndex((c) => c !== 0);
+      const [t1, t2] = [0, 1, 2].filter((a) => a !== axis);
+      for (const [s1, s2] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        const occ = [5 + n[0], 10 + n[1], 5 + n[2]];
+        occ[t1] += s1;
+        occ[t2] += s2;
+        const g = buildChunkGeometry(blocksWorld([[5, 10, 5, B.STONE], [...occ, B.DIRT]]), 0, 0);
+        const P = g.solid.positions;
+        let checked = 0;
+        for (const t of triangles(g.solid)) {
+          if (t.cell.join(',') !== '5,10,5') continue;
+          const off = sub(t.centroid, [5.5, 10.5, 5.5]);
+          const k = [0, 1, 2].find((a) => Math.abs(Math.abs(off[a]) - 0.5) < EPS);
+          const expected = [0, 0, 0];
+          expected[k] = Math.sign(off[k]);
+          expect(t.dir).toBe(dirName(expected));
+          checked++;
+        }
+        expect(checked).toBe(12);
+        // The face toward the occluder's layer used the diagonal through its darkened vertex.
+        const face = quads(g.solid).find((q) => {
+          const t = triangles({ positions: P, indices: Uint32Array.of(q.base, q.base + 1, q.base + 2) })[0];
+          return t.dir === name && t.cell.join(',') === '5,10,5';
+        });
+        seenDiagonals.add(face.shared);
+      }
+    }
+    expect(seenDiagonals).toEqual(new Set(['0-2', '1-3']));
+  });
+
   it('every triangle on real terrain faces from its block toward a visible neighbor', () => {
+    const diagonals = { '0-2': 0, '1-3': 0 };
     for (const [cx, cz] of [[0, 0], [-1, -1], [1, -1]]) {
       const g = buildChunkGeometry(worldGet, cx, cz);
+      for (const q of quads(g.solid)) diagonals[q.shared]++;
       for (const [group, water] of [[g.solid, false], [g.water, true]]) {
         const bad = [];
         for (const t of triangles(group)) {
@@ -290,9 +370,12 @@ describe('mesher vertex data', () => {
         expect(triangles(group).length).toBe(group.indices.length / 3);
       }
     }
+    // Real terrain has plenty of AO-flipped quads, and they wind correctly too.
+    expect(diagonals['0-2']).toBeGreaterThan(100);
+    expect(diagonals['1-3']).toBeGreaterThan(100);
   });
 
-  it('bakes per-face shading into gray vertex colors', () => {
+  it('bakes per-face shading into gray vertex colors (isolated blocks: every AO factor is 1)', () => {
     const g = buildChunkGeometry(blocksWorld([[5, 10, 5, B.GRASS], [8, 10, 5, B.WATER]]), 0, 0);
     for (const group of [g.solid, g.water]) {
       const C = group.colors;
@@ -377,6 +460,138 @@ describe('mesher vertex data', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Ambient occlusion
+// ---------------------------------------------------------------------------
+
+describe('mesher ambient occlusion', () => {
+  /** Color of the vertex at chunk-local position `p` on face `dir` of block `cell` (chunk 0,0). */
+  function vertexColor(group, cell, dir, p) {
+    const P = group.positions;
+    for (const t of triangles(group)) {
+      if (t.dir !== dir || t.cell.join(',') !== cell.join(',')) continue;
+      for (const i of t.ids) {
+        if (P[i * 3] === p[0] && P[i * 3 + 1] === p[1] && P[i * 3 + 2] === p[2]) return group.colors[i * 3];
+      }
+    }
+    throw new Error(`no vertex ${p} on ${dir} of ${cell}`);
+  }
+
+  it('uses the configured factors, ordered from dark (level 0) to open (level 3 = 1.0)', () => {
+    expect(AO_FACTORS.length).toBe(4);
+    expect(AO_FACTORS[3]).toBe(1);
+    for (let i = 1; i < 4; i++) expect(AO_FACTORS[i]).toBeGreaterThan(AO_FACTORS[i - 1]);
+  });
+
+  it('a block in a corner (floor + two walls) has darker vertices than an exposed block', () => {
+    // Floor y = 9 over x, z in 2..8; walls at x = 4 and z = 4 (y 10..11); the block sits at (5, 10, 5)
+    // in the corner. A second block at (5, 20, 5) floats in open air.
+    const list = [[5, 10, 5, B.STONE], [5, 20, 5, B.STONE]];
+    for (let x = 2; x <= 8; x++) for (let z = 2; z <= 8; z++) list.push([x, 9, z, B.STONE]);
+    for (let y = 10; y <= 11; y++) {
+      for (let k = 2; k <= 8; k++) {
+        list.push([4, y, k, B.STONE]);
+        if (k !== 4) list.push([k, y, 4, B.STONE]);
+      }
+    }
+    const g = buildChunkGeometry(blocksWorld(list), 0, 0);
+    const corner = [5, 10, 5];
+    const open = [5, 20, 5];
+
+    // Exposed block: every vertex keeps its plain face shade.
+    for (const t of triangles(g.solid)) {
+      if (t.cell.join(',') !== open.join(',')) continue;
+      for (const i of t.ids) expect(g.solid.colors[i * 3]).toBeCloseTo(SHADE[t.dir], 6);
+    }
+
+    // Top face of the cornered block: the corner vertex sees both walls (level 0), the two vertices
+    // along one wall see a side and the corner (level 1), the far vertex is open (level 3).
+    expect(vertexColor(g.solid, corner, '+y', [5, 11, 5])).toBeCloseTo(1.0 * AO_FACTORS[0], 6);
+    expect(vertexColor(g.solid, corner, '+y', [6, 11, 5])).toBeCloseTo(1.0 * AO_FACTORS[1], 6);
+    expect(vertexColor(g.solid, corner, '+y', [5, 11, 6])).toBeCloseTo(1.0 * AO_FACTORS[1], 6);
+    expect(vertexColor(g.solid, corner, '+y', [6, 11, 6])).toBeCloseTo(1.0, 6);
+    expect(vertexColor(g.solid, corner, '+y', [5, 11, 5])).toBeLessThan(vertexColor(g.solid, open, '+y', [5, 21, 5]));
+
+    // East face (+x, toward open air at x = 6): the bottom vertices touch the floor, the one next to
+    // the z = 4 wall even more so; the top vertex away from the wall is open.
+    expect(vertexColor(g.solid, corner, '+x', [6, 10, 5])).toBeCloseTo(0.65 * AO_FACTORS[0], 6);
+    expect(vertexColor(g.solid, corner, '+x', [6, 10, 6])).toBeCloseTo(0.65 * AO_FACTORS[1], 6);
+    expect(vertexColor(g.solid, corner, '+x', [6, 11, 5])).toBeCloseTo(0.65 * AO_FACTORS[1], 6);
+    expect(vertexColor(g.solid, corner, '+x', [6, 11, 6])).toBeCloseTo(0.65, 6);
+    // The faces against the walls and the floor are culled.
+    const faces = faceSet(g.solid);
+    for (const d of ['-x', '-z', '-y']) expect(faces.has(`5,10,5,${d}`)).toBe(false);
+  });
+
+  it('only opaque blocks occlude: glass, leaves and water cast no AO; water faces get none', () => {
+    for (const id of [B.GLASS, B.LEAVES, B.WATER]) {
+      // Transparent blocks on all 4 sides of the top layer, plus one on the diagonal.
+      const list = [[5, 10, 5, B.STONE], [4, 11, 5, id], [6, 11, 5, id], [5, 11, 4, id], [5, 11, 6, id], [4, 11, 4, id]];
+      const g = buildChunkGeometry(blocksWorld(list), 0, 0);
+      for (const t of triangles(g.solid)) {
+        if (t.cell.join(',') !== '5,10,5') continue;
+        for (const i of t.ids) expect(g.solid.colors[i * 3]).toBeCloseTo(SHADE[t.dir], 6);
+      }
+    }
+    // A water block in a stone corner keeps plain face shading on every face.
+    const list = [[5, 10, 5, B.WATER]];
+    for (let x = 3; x <= 7; x++) for (let z = 3; z <= 7; z++) list.push([x, 9, z, B.STONE]);
+    for (let k = 3; k <= 7; k++) list.push([4, 11, k, B.STONE], [k, 11, 4, B.STONE]);
+    const g = buildChunkGeometry(blocksWorld(list), 0, 0);
+    expect(faceCount(g.water)).toBeGreaterThan(0);
+    for (const t of triangles(g.water)) for (const i of t.ids) expect(g.water.colors[i * 3]).toBeCloseTo(SHADE[t.dir], 6);
+  });
+
+  it('flips the diagonal through the darkened vertex when AO is anisotropic; both triangles face out', () => {
+    // An opaque block diagonally above each corner of the top face of (5, 10, 5) darkens just that
+    // vertex (corner only: level 2). Top face corners in mesher order: 0 (x0, z1), 1 (x1, z1),
+    // 2 (x1, z0), 3 (x0, z0). Split 0-2 unless level0 + level2 > level1 + level3.
+    const cases = [
+      { occ: [4, 11, 6], dark: [5, 11, 6], diagonal: '0-2' },
+      { occ: [6, 11, 6], dark: [6, 11, 6], diagonal: '1-3' },
+      { occ: [6, 11, 4], dark: [6, 11, 5], diagonal: '0-2' },
+      { occ: [4, 11, 4], dark: [5, 11, 5], diagonal: '1-3' },
+    ];
+    for (const { occ, dark, diagonal } of cases) {
+      const g = buildChunkGeometry(blocksWorld([[5, 10, 5, B.STONE], [...occ, B.STONE]]), 0, 0);
+      const P = g.solid.positions;
+      const C = g.solid.colors;
+      const top = quads(g.solid).find((q) => {
+        const t = triangles({ positions: P, indices: Uint32Array.of(q.base, q.base + 1, q.base + 2) })[0];
+        return t.dir === '+y' && t.cell.join(',') === '5,10,5';
+      });
+      expect(top.shared).toBe(diagonal);
+      // The shared diagonal runs through the darkened vertex.
+      const sharedIds = top.shared.split('-').map((k) => top.base + Number(k));
+      const darkIds = sharedIds.filter((i) => vert(P, i).join(',') === dark.join(','));
+      expect(darkIds.length).toBe(1);
+      expect(C[darkIds[0] * 3]).toBeCloseTo(AO_FACTORS[2], 6);
+      // Both triangles of the face wind counter-clockwise (normal +Y).
+      const tris = triangles({ positions: P, indices: g.solid.indices.subarray((top.base / 4) * 6, (top.base / 4) * 6 + 6) });
+      expect(tris.map((t) => t.dir)).toEqual(['+y', '+y']);
+    }
+  });
+
+  it('matches the reference AO rule at every vertex of real terrain (9 chunks)', () => {
+    for (const [cx, cz] of NEAR) {
+      const g = buildChunkGeometry(worldGet, cx, cz);
+      for (const [group, water] of [[g.solid, false], [g.water, true]]) {
+        const P = group.positions;
+        const C = group.colors;
+        const bad = [];
+        for (const t of triangles(group)) {
+          for (const i of t.ids) {
+            const level = water ? 3 : refAoLevel(worldGet, cx, cz, t.cell, t.dir, vert(P, i));
+            const expected = SHADE[t.dir] * AO_FACTORS[level];
+            if (Math.abs(C[i * 3] - expected) > 1e-6) bad.push({ cell: t.cell, dir: t.dir, v: vert(P, i), got: C[i * 3], expected });
+          }
+        }
+        expect(bad.slice(0, 5)).toEqual([]);
+      }
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Input/output mechanics
 // ---------------------------------------------------------------------------
 
@@ -455,6 +670,35 @@ describe('mesher mechanics', () => {
     );
     expect(ms).toBeLessThan(20);
     expect(coldMs).toBeLessThan(20);
+  });
+
+  it('meshes the whole spawn area (with AO and caves) well under the 6 ms/chunk budget', () => {
+    // Every chunk within RENDER_DISTANCE, as at spawn. Max includes any GC pause that lands inside.
+    for (const seed of [SEED, 4242]) {
+      const w = new World(seed);
+      w.generateAround(8, 8, GEN_DISTANCE);
+      const chunks = [...w.consumeDirtyChunks()];
+      const get = (x, y, z) => w.getBlock(x, y, z);
+      for (let i = 0; i < 10; i++) buildChunkGeometry(get, chunks[i].cx, chunks[i].cz); // warm up
+      let total = 0;
+      let max = 0;
+      let tris = 0;
+      for (const c of chunks) {
+        const t0 = performance.now();
+        const g = buildChunkGeometry(get, c.cx, c.cz);
+        const dt = performance.now() - t0;
+        total += dt;
+        if (dt > max) max = dt;
+        tris += (g.solid.indices.length + g.water.indices.length) / 3;
+      }
+      const avg = total / chunks.length;
+      console.log(
+        `mesher (AO + caves): seed ${seed}, ${chunks.length} chunks, avg ${avg.toFixed(3)} ms, ` +
+          `max ${max.toFixed(3)} ms per chunk, ${Math.round(tris / chunks.length)} triangles per chunk`,
+      );
+      expect(chunks.length).toBeGreaterThan(100);
+      expect(avg).toBeLessThan(6);
+    }
   });
 });
 
@@ -541,6 +785,67 @@ describe('chunkMeshes', () => {
     expect(scene.children.length).toBe(1);
     cm.removeChunk('-1,0');
     expect(cm.chunkCount()).toBe(1);
+  });
+
+  it('converts AO-shaded colors exactly (cached lookup) and keeps the mesher output untouched', () => {
+    const scene = new THREE.Scene();
+    const cm = createChunkMeshes(scene, new THREE.Texture());
+    const list = [[5, 10, 5, B.STONE]];
+    for (let x = 3; x <= 7; x++) for (let z = 3; z <= 7; z++) list.push([x, 9, z, B.STONE]);
+    for (let k = 3; k <= 7; k++) list.push([4, 10, k, B.STONE], [k, 10, 4, B.STONE], [4, 11, k, B.DIRT]);
+    for (let pass = 0; pass < 2; pass++) { // the second pass reads every value from the cache
+      const data = buildChunkGeometry(blocksWorld(list), 0, 0);
+      const before = Array.from(data.solid.colors);
+      expect(new Set(before).size).toBeGreaterThan(6); // AO really adds levels beyond the 4 face shades
+      cm.setChunk('0,0', 0, 0, data);
+      expect(Array.from(data.solid.colors)).toEqual(before);
+      const linear = scene.children.find((m) => m.material === cm.solidMaterial).geometry.attributes.color.array;
+      expect(linear).not.toBe(data.solid.colors);
+      expect(linear.length).toBe(before.length);
+      const bad = [];
+      for (let i = 0; i < linear.length; i++) {
+        if (Math.abs(linear[i] - srgbToLinear(before[i])) > 1e-6) bad.push([i, before[i], linear[i]]);
+      }
+      expect(bad).toEqual([]);
+    }
+  });
+
+  it('remeshing reuses the chunk meshes and disposes every replaced geometry (no leak)', () => {
+    const scene = new THREE.Scene();
+    const cm = createChunkMeshes(scene, new THREE.Texture());
+    const both = () => twoGroups();
+    const solidOnly = () => buildChunkGeometry(blocksWorld([[-10, 5, 3, B.STONE]]), -1, 0);
+    cm.setChunk('-1,0', -1, 0, both());
+    const solidMesh = scene.children.find((m) => m.material === cm.solidMaterial);
+    const live = new Set();
+    let created = 0;
+    const track = () => {
+      for (const m of scene.children) {
+        if (live.has(m.geometry)) continue;
+        created++;
+        live.add(m.geometry);
+        const geo = m.geometry;
+        geo.addEventListener('dispose', () => live.delete(geo));
+      }
+    };
+    track();
+    for (let i = 0; i < 50; i++) {
+      cm.setChunk('-1,0', -1, 0, i % 3 === 2 ? solidOnly() : both());
+      track();
+      expect(live.size).toBe(scene.children.length); // every geometry not in the scene was disposed
+      expect(live.size).toBeLessThanOrEqual(2);
+      expect(scene.children.includes(solidMesh)).toBe(true); // same Mesh object, new geometry
+    }
+    expect(created).toBeGreaterThan(50);
+    expect(cm.chunkCount()).toBe(1);
+    expect(cm.triangleCount()).toBe(24); // the last remesh (i = 49) had both groups
+    const water = scene.children.find((m) => m.material === cm.waterMaterial);
+    expect(water.renderOrder).toBe(1);
+    expect(water.position.toArray()).toEqual([-CS, 0, 0]);
+    cm.removeChunk('-1,0');
+    expect(live.size).toBe(0);
+    expect(scene.children.length).toBe(0);
+    expect(cm.triangleCount()).toBe(0);
   });
 
   it('setBrightness sets both material colors as sRGB gray', () => {

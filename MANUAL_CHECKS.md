@@ -26,3 +26,6 @@ These need a human to verify by running the game; they are not covered by automa
 - [ ] Underwater: blue-green, short fog under water that clears when surfacing (Task 9).
 - [ ] Save/reload: break and place a few blocks (including on a chunk border), walk somewhere, wait 10 s or just reload: position, view direction, hotbar slot, time of day and every edit are restored. Walk far away and come back: edits are still there after their chunks reload (Task 10; the manager confirmed a reload round trip headless).
 - [ ] New World: pause → New World → Yes starts a different world, and reloading doesn't bring the old one back (Task 10).
+- [ ] Ambient occlusion: inner corners, the bottoms of walls and cave edges are softly darkened, with no diagonal streaks across faces (Task 11).
+- [ ] Caves: dig down a few blocks in a hill to find cave systems; they never break the surface and never flood (Task 11).
+- [ ] Performance on an integrated-GPU laptop: F3 shows close to 60 FPS at render distance 6 while standing and while flying across terrain, with no regular hitches when new chunks stream in (about 410k triangles are loaded while moving; frustum culling draws only the visible ones). This could not be measured headless, where SwiftShader renders on the CPU (Task 11).

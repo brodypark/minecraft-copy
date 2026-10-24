@@ -1,9 +1,19 @@
 // Deterministic terrain generator (PROJECT.md section 6).
 // Pure module: no three.js and no world state, so it runs in node and can move into a Web Worker.
 // The same seed always yields the same blocks, whatever order chunks are generated in.
+//
+// Caves (Task 11, section 6): a 3D simplex threshold carve. A cell (x, y, z) becomes AIR when the cave
+// noise there exceeds CAVE_THRESHOLD (raised near the vertical limits) and
+//   CAVE_MIN_Y <= y <= min(h, hN, hS, hE, hW) - CAVE_SURFACE_GAP
+// where h is the column's surface height and hN..hW those of its 4 horizontal neighbors. With a gap
+// of 5, every cave cell has at least 4 solid blocks above it, and the cells beside it lie at least
+// 5 blocks below their own columns' surfaces. Water only exists above a column's surface, so no cave
+// cell ever touches WATER or opens to the sky. Caves depend only on the seed and (x, y, z), so they
+// are order-independent like everything else; they are carved after trees, which never place blocks
+// below the surface.
 
 import alea from 'alea';
-import { createNoise2D } from 'simplex-noise';
+import { createNoise2D, createNoise3D } from 'simplex-noise';
 import {
   CHUNK_SIZE, WORLD_HEIGHT, SEA_LEVEL,
   TERRAIN_BASE as BASE, TERRAIN_DETAIL_SCALE as DETAIL_SCALE, TERRAIN_DETAIL_AMP as DETAIL_AMP,
@@ -11,6 +21,8 @@ import {
   TERRAIN_MIN_HEIGHT as MIN_HEIGHT, TERRAIN_MAX_HEIGHT as MAX_HEIGHT,
   FBM_OCTAVES as OCTAVES, FBM_PERSISTENCE as PERSISTENCE, FBM_LACUNARITY as LACUNARITY,
   TREE_CHANCE,
+  CAVES_ENABLED, CAVE_XZ_SCALE, CAVE_Y_SCALE, CAVE_THRESHOLD, CAVE_MIN_Y, CAVE_SURFACE_GAP,
+  CAVE_TAPER, CAVE_TAPER_STEP,
 } from '../config.js';
 import { B } from '../blocks.js';
 import { CHUNK_VOLUME } from './chunk.js';
@@ -26,6 +38,7 @@ const SALT_CORNER = 0x6c8e9cf5;
 
 const CS = CHUNK_SIZE;
 const LAYER = CS * CS; // blocks per y layer in a chunk
+const HP = CS + 2; // padded height grid: the chunk's columns plus a 1-column border (cave limits)
 
 /**
  * Reduce any seed (number or string) to a 32-bit integer for hashing. Platform stable.
@@ -81,19 +94,27 @@ export function hash3(seedInt, x, z, salt) {
 /**
  * Create a terrain generator for a seed.
  * @param {number|string} seed
+ * @param {{ caves?: boolean }} [options] caves: carve caves (default CAVES_ENABLED from config.js)
  * @returns {{
  *   seed: number|string,
+ *   caves: boolean,
+ *   caveTop: (x: number, z: number) => number,
  *   surfaceHeight: (x: number, z: number) => number,
  *   treeAt: (x: number, z: number) => number,
  *   forEachTreeBlock: (x: number, z: number, fn: (x: number, y: number, z: number, id: number) => void) => boolean,
  *   generateChunk: (cx: number, cz: number, out?: Uint8Array) => Uint8Array,
  * }}
  */
-export function createTerrain(seed) {
+export function createTerrain(seed, options) {
   const prng = alea(seed);
   const detailNoise = createNoise2D(prng);
   const hillNoise = createNoise2D(prng);
+  // Created after the 2D noises from the same stream, so adding caves left the height field unchanged.
+  const caveNoise = createNoise3D(prng);
   const seedInt = seedToInt(seed);
+  const caves = options && typeof options.caves === 'boolean' ? options.caves : CAVES_ENABLED;
+  const CAVE_XZ = 1 / CAVE_XZ_SCALE;
+  const CAVE_Y = 1 / CAVE_Y_SCALE;
 
   // Per-octave offsets decorrelate the octaves (otherwise every octave is 0 at the origin).
   function fbm(noise, x, z) {
@@ -184,7 +205,38 @@ export function createTerrain(seed) {
     return true;
   }
 
-  const heights = new Int32Array(CS * CS);
+  /**
+   * Highest y a cave may reach in column (x, z): min(own and 4 neighbor surface heights) - gap.
+   * Below CAVE_MIN_Y means no cave in this column.
+   * @param {number} x
+   * @param {number} z
+   * @returns {number}
+   */
+  function caveTop(x, z) {
+    const m = Math.min(
+      surfaceHeight(x, z), surfaceHeight(x + 1, z), surfaceHeight(x - 1, z),
+      surfaceHeight(x, z + 1), surfaceHeight(x, z - 1),
+    );
+    return m - CAVE_SURFACE_GAP;
+  }
+
+  /**
+   * Carve the caves of one column of `blocks` between CAVE_MIN_Y and `top` (inclusive). Within
+   * CAVE_TAPER blocks of either limit the threshold rises, so caves close off with rounded floors
+   * and ceilings instead of flat cuts.
+   */
+  function carveColumn(blocks, col, wx, wz, top) {
+    const nx = wx * CAVE_XZ;
+    const nz = wz * CAVE_XZ;
+    for (let y = CAVE_MIN_Y; y <= top; y++) {
+      const edge = Math.min(y - CAVE_MIN_Y, top - y);
+      const threshold = edge < CAVE_TAPER ? CAVE_THRESHOLD + (CAVE_TAPER - edge) * CAVE_TAPER_STEP : CAVE_THRESHOLD;
+      if (caveNoise(nx, y * CAVE_Y, nz) > threshold) blocks[y * LAYER + col] = B.AIR;
+    }
+  }
+
+  // Surface heights of the chunk plus a 1-column border (the border feeds the cave limits).
+  const heights = new Int32Array(HP * HP);
 
   /**
    * Generate the blocks of chunk (cx, cz).
@@ -199,11 +251,15 @@ export function createTerrain(seed) {
     const x0 = cx * CS;
     const z0 = cz * CS;
 
+    // Padded height grid (corners unused by the cave rule but cheap enough to fill).
+    for (let pz = 0; pz < HP; pz++) {
+      for (let px = 0; px < HP; px++) heights[pz * HP + px] = surfaceHeight(x0 + px - 1, z0 + pz - 1);
+    }
+
     // Terrain columns: bedrock, stone, dirt/sand, grass/sand, then water up to sea level.
     for (let lz = 0; lz < CS; lz++) {
       for (let lx = 0; lx < CS; lx++) {
-        const h = surfaceHeight(x0 + lx, z0 + lz);
-        heights[lz * CS + lx] = h;
+        const h = heights[(lz + 1) * HP + lx + 1];
         const col = lz * CS + lx;
         const beach = h <= SEA_LEVEL + 1;
         const topId = beach ? B.SAND : B.GRASS;
@@ -235,13 +291,25 @@ export function createTerrain(seed) {
         const lx = wx - x0;
         const lz = wz - z0;
         const inside = lx >= 0 && lx < CS && lz >= 0 && lz < CS;
-        const h = inside ? heights[lz * CS + lx] : surfaceHeight(wx, wz);
+        const h = inside ? heights[(lz + 1) * HP + lx + 1] : surfaceHeight(wx, wz);
         if (!isGrassHeight(h)) continue;
         visitTree(wx, wz, h, trunk, write);
+      }
+    }
+
+    // Caves, after trees (see the header comment for why they can't reach water or the sky).
+    if (caves) {
+      for (let lz = 0; lz < CS; lz++) {
+        for (let lx = 0; lx < CS; lx++) {
+          const p = (lz + 1) * HP + lx + 1;
+          const top = Math.min(heights[p], heights[p - 1], heights[p + 1], heights[p - HP], heights[p + HP])
+            - CAVE_SURFACE_GAP;
+          if (top >= CAVE_MIN_Y) carveColumn(blocks, lz * CS + lx, x0 + lx, z0 + lz, top);
+        }
       }
     }
     return blocks;
   }
 
-  return { seed, surfaceHeight, treeAt, forEachTreeBlock, generateChunk };
+  return { seed, caves, caveTop, surfaceHeight, treeAt, forEachTreeBlock, generateChunk };
 }

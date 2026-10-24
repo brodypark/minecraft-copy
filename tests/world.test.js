@@ -272,6 +272,102 @@ describe('World edits persistence', () => {
   });
 });
 
+describe('World per-frame methods (allocation-free steady state)', () => {
+  it('consumeDirtyChunks returns one reused array, valid until the next call', () => {
+    const w = new World(SEED);
+    w.generateAround(8, 8, RENDER_DISTANCE + 1);
+    const a = w.consumeDirtyChunks(2);
+    expect(a.length).toBe(2);
+    const keysA = keysOf(a);
+    const b = w.consumeDirtyChunks(2);
+    expect(b).toBe(a); // same array object, refilled
+    expect(keysOf(b)).not.toEqual(keysA);
+    w.consumeDirtyChunks();
+    const idle = w.consumeDirtyChunks();
+    expect(idle).toBe(a);
+    expect(idle).toEqual([]);
+  });
+
+  it('idle frames skip the dirty-set scan; any change makes the next call scan again', () => {
+    const w = new World(SEED);
+    while (w.update(8, 8) > 0);
+    w.consumeDirtyChunks();
+    // The outer ring (beyond RENDER_DISTANCE) stays dirty forever: never meshed from here.
+    expect(w.pendingMeshCount()).toBe(0);
+    let scans = 0;
+    const isMeshable = w._isMeshable.bind(w);
+    w._isMeshable = (chunk) => { scans++; return isMeshable(chunk); };
+
+    expect(w.consumeDirtyChunks(2)).toEqual([]); // first idle call scans once and remembers
+    const firstScan = scans;
+    expect(firstScan).toBeGreaterThan(0);
+    for (let frame = 0; frame < 100; frame++) {
+      expect(w.update(8 + (frame % 5), 8)).toBe(0); // moving inside the same chunk changes nothing
+      expect(w.consumeUnloadedChunks()).toEqual([]);
+      expect(w.consumeDirtyChunks(2)).toEqual([]);
+      expect(w.pendingMeshCount()).toBe(0);
+    }
+    expect(scans).toBe(firstScan);
+
+    // An edit is picked up on the very next call.
+    expect(w.setBlock(5, 40, 5, B.GLASS)).toBe(true);
+    expect(w.pendingMeshCount()).toBe(1);
+    expect(keysOf(w.consumeDirtyChunks(2))).toEqual(['0,0']);
+    expect(scans).toBeGreaterThan(firstScan);
+    expect(w.pendingMeshCount()).toBe(0);
+
+    // Crossing into a new chunk: new chunks generate, and the queue fills as they become meshable.
+    expect(w.update(8 + CHUNK_SIZE, 8)).toBeGreaterThan(0);
+    while (w.update(8 + CHUNK_SIZE, 8) > 0);
+    expect(w.pendingMeshCount()).toBeGreaterThan(0);
+    const got = w.consumeDirtyChunks();
+    expect(got.length).toBeGreaterThan(0);
+    for (const c of got) expect((c.cx - 1) ** 2 + c.cz ** 2).toBeLessThanOrEqual(RENDER_DISTANCE ** 2);
+    expect(w.pendingMeshCount()).toBe(0);
+  });
+
+  it('limit selection is nearest first and stable, like a full sort', () => {
+    const w = new World(SEED);
+    w.generateAround(8, 8, RENDER_DISTANCE + 1);
+    const all = [];
+    for (;;) {
+      const batch = w.consumeDirtyChunks(3);
+      if (batch.length === 0) break;
+      expect(batch.length).toBeLessThanOrEqual(3);
+      all.push(...batch);
+    }
+    expect(all.length).toBe(circleCount(RENDER_DISTANCE));
+    const d = (c) => c.cx * c.cx + c.cz * c.cz;
+    for (let i = 1; i < all.length; i++) expect(d(all[i])).toBeGreaterThanOrEqual(d(all[i - 1]));
+
+    // limit 0 returns nothing but keeps the chunks queued (and does not count as idle).
+    const w2 = new World(SEED);
+    w2.generateAround(8, 8, 2);
+    expect(w2.consumeDirtyChunks(0)).toEqual([]);
+    expect(keysOf(w2.consumeDirtyChunks(1))).toEqual(['0,0']);
+  });
+
+  it('consumeUnloadedChunks double-buffers: the result survives until the next call', () => {
+    const w = new World(SEED);
+    while (w.update(0, 0) > 0);
+    const empty = w.consumeUnloadedChunks();
+    expect(empty).toEqual([]);
+    expect(w.consumeUnloadedChunks()).toBe(empty); // nothing new: same empty array, no swap
+
+    w.update(5 * CHUNK_SIZE, 0);
+    const first = w.consumeUnloadedChunks();
+    const firstKeys = [...first];
+    expect(firstKeys.length).toBeGreaterThan(0);
+    w.update(10 * CHUNK_SIZE, 0); // more unloads while `first` is still being read
+    expect(first).toEqual(firstKeys);
+    const second = w.consumeUnloadedChunks();
+    expect(second).not.toBe(first);
+    expect(second.length).toBeGreaterThan(0);
+    for (const key of second) expect(firstKeys).not.toContain(key);
+    expect(w.consumeUnloadedChunks()).toEqual([]);
+  });
+});
+
 describe('World streaming', () => {
   it('generates at most CHUNK_GEN_PER_FRAME chunks per update, nearest first, up to GEN_DISTANCE', () => {
     const w = new World(SEED);

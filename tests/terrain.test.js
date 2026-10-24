@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { CHUNK_SIZE, WORLD_HEIGHT, SEA_LEVEL } from '../src/config.js';
+import {
+  CHUNK_SIZE, WORLD_HEIGHT, SEA_LEVEL, RENDER_DISTANCE, GEN_DISTANCE, CAVE_MIN_Y, CAVE_SURFACE_GAP,
+} from '../src/config.js';
 import { B } from '../src/blocks.js';
 import { blockIndex, toChunkCoord, toLocalCoord, CHUNK_VOLUME } from '../src/world/chunk.js';
 import { createTerrain, hash3 } from '../src/world/terrain.js';
 import { World } from '../src/world/world.js';
+import { buildChunkGeometry } from '../src/render/mesher.js';
 
 const SEED = 12345;
 const SAMPLE_CHUNKS = [[0, 0], [-1, -1], [3, -7], [-12, 9], [25, 25], [-40, -3]];
@@ -94,7 +97,9 @@ describe('terrain content', () => {
     }
   });
 
-  it('builds columns as bedrock, stone, dirt/sand, grass/sand, then water/air', () => {
+  // Task 11 changed this test: caves may turn stone into AIR, but only between CAVE_MIN_Y and
+  // caveTop (= min of the column's and its 4 neighbors' surface heights - CAVE_SURFACE_GAP).
+  it('builds columns as bedrock, stone (or cave air), dirt/sand, grass/sand, then water/air', () => {
     for (const { cx, cz, data } of generated) {
       for (let lz = 0; lz < CHUNK_SIZE; lz++) {
         for (let lx = 0; lx < CHUNK_SIZE; lx++) {
@@ -107,7 +112,12 @@ describe('terrain content', () => {
           expect(at(h - 1)).toBe(beach ? B.SAND : B.DIRT);
           expect(at(h - 2)).toBe(beach ? B.SAND : B.DIRT);
           expect(at(h - 3)).toBe(B.DIRT);
-          for (let y = 1; y <= h - 4; y++) expect(at(y)).toBe(B.STONE);
+          const caveTop = t.caveTop(cx * CHUNK_SIZE + lx, cz * CHUNK_SIZE + lz);
+          expect(caveTop).toBeLessThanOrEqual(h - CAVE_SURFACE_GAP);
+          for (let y = 1; y <= h - 4; y++) {
+            if (y >= CAVE_MIN_Y && y <= caveTop) expect([B.STONE, B.AIR]).toContain(at(y));
+            else expect(at(y)).toBe(B.STONE);
+          }
           for (let y = h + 1; y < WORLD_HEIGHT; y++) {
             const id = at(y);
             if (y <= SEA_LEVEL) expect(id).toBe(B.WATER);
@@ -279,6 +289,165 @@ describe('trees across chunk borders', () => {
       }
     });
   }
+});
+
+describe('caves', () => {
+  const CAVE_CHUNKS = [...SAMPLE_CHUNKS, [1, 0], [0, 1], [-5, 4], [8, -2], [-20, -20]];
+
+  /** Number of cave AIR cells (AIR below h - 4) in a generated chunk. */
+  function caveCells(t, cx, cz, data) {
+    let n = 0;
+    for (let lz = 0; lz < CHUNK_SIZE; lz++) {
+      for (let lx = 0; lx < CHUNK_SIZE; lx++) {
+        const h = t.surfaceHeight(cx * CHUNK_SIZE + lx, cz * CHUNK_SIZE + lz);
+        for (let y = 1; y < h - 4; y++) if (data[blockIndex(lx, y, lz)] === B.AIR) n++;
+      }
+    }
+    return n;
+  }
+
+  it('exist, but only as AIR between y = CAVE_MIN_Y (5) and h - 5 (and caveTop)', () => {
+    expect(CAVE_MIN_Y).toBe(5);
+    expect(CAVE_SURFACE_GAP).toBe(5);
+    const t = createTerrain(SEED);
+    expect(t.caves).toBe(true);
+    let caves = 0;
+    for (const [cx, cz] of CAVE_CHUNKS) {
+      const data = t.generateChunk(cx, cz);
+      for (let lz = 0; lz < CHUNK_SIZE; lz++) {
+        for (let lx = 0; lx < CHUNK_SIZE; lx++) {
+          const x = cx * CHUNK_SIZE + lx;
+          const z = cz * CHUNK_SIZE + lz;
+          const h = t.surfaceHeight(x, z);
+          const top = t.caveTop(x, z);
+          for (let y = 0; y <= h; y++) {
+            if (data[blockIndex(lx, y, lz)] !== B.AIR) continue;
+            caves++;
+            if (y < 5 || y > h - 5 || y > top) throw new Error(`cave air out of range at ${x},${y},${z} (h ${h}, top ${top})`);
+          }
+        }
+      }
+    }
+    // Caves really exist: on average more than 100 cave cells per sample chunk.
+    expect(caves).toBeGreaterThan(100 * CAVE_CHUNKS.length);
+  });
+
+  it('only replace STONE with AIR: everything else matches terrain without caves', () => {
+    const withCaves = createTerrain(SEED);
+    const without = createTerrain(SEED, { caves: false });
+    expect(without.caves).toBe(false);
+    for (const [cx, cz] of CAVE_CHUNKS) {
+      const a = withCaves.generateChunk(cx, cz);
+      const b = without.generateChunk(cx, cz);
+      for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i] && !(a[i] === B.AIR && b[i] === B.STONE)) throw new Error(`index ${i}: ${a[i]} vs ${b[i]}`);
+      }
+    }
+    for (let x = -50; x <= 50; x += 7) {
+      for (let z = -50; z <= 50; z += 7) expect(withCaves.surfaceHeight(x, z)).toBe(without.surfaceHeight(x, z));
+    }
+  });
+
+  it('never touch WATER: no cave AIR cell (below h - 4) has a WATER neighbor, in coastal areas', () => {
+    let caves = 0;
+    let water = 0;
+    let nearWater = 0; // cave cells within 3 columns of a column with water above it
+    for (const [ox, oz] of [[0, 0], [100, -60], [-150, 200]]) {
+      const w = new World(SEED);
+      w.generateAround(ox, oz, 3);
+      const t = w.terrain;
+      const cx0 = toChunkCoord(ox);
+      const cz0 = toChunkCoord(oz);
+      // The 5x5 chunks around the center: all of their neighbors are generated (radius 3).
+      for (let x = (cx0 - 2) * CHUNK_SIZE; x < (cx0 + 3) * CHUNK_SIZE; x++) {
+        for (let z = (cz0 - 2) * CHUNK_SIZE; z < (cz0 + 3) * CHUNK_SIZE; z++) {
+          const h = t.surfaceHeight(x, z);
+          for (let y = 1; y < WORLD_HEIGHT; y++) {
+            const id = w.getBlock(x, y, z);
+            if (id === B.WATER) water++;
+            if (id !== B.AIR || y >= h - 4) continue;
+            caves++;
+            for (const [dx, dy, dz] of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]) {
+              if (w.getBlock(x + dx, y + dy, z + dz) === B.WATER) {
+                throw new Error(`cave cell ${x},${y},${z} touches water at ${x + dx},${y + dy},${z + dz}`);
+              }
+            }
+            let near = false;
+            for (let dx = -3; dx <= 3 && !near; dx++) {
+              for (let dz = -3; dz <= 3; dz++) if (t.surfaceHeight(x + dx, z + dz) < SEA_LEVEL) { near = true; break; }
+            }
+            if (near) nearWater++;
+          }
+        }
+      }
+    }
+    // The areas really have water, caves, and caves close to water (so the rule is exercised).
+    expect(water).toBeGreaterThan(5000);
+    expect(caves).toBeGreaterThan(5000);
+    expect(nearWater).toBeGreaterThan(500);
+  });
+
+  it('are deterministic and independent of generation order; different seeds differ', () => {
+    const a = createTerrain(SEED);
+    const b = createTerrain(SEED);
+    const forward = CAVE_CHUNKS.map(([cx, cz]) => a.generateChunk(cx, cz));
+    let caves = 0;
+    for (let i = CAVE_CHUNKS.length - 1; i >= 0; i--) {
+      const [cx, cz] = CAVE_CHUNKS[i];
+      const data = b.generateChunk(cx, cz);
+      expect(data).toEqual(forward[i]);
+      caves += caveCells(b, cx, cz, data);
+    }
+    expect(caves).toBeGreaterThan(1000);
+
+    // Through the World, in two different orders.
+    const w1 = new World(SEED);
+    const w2 = new World(SEED);
+    for (const [cx, cz] of CAVE_CHUNKS) w1.ensureChunk(cx, cz);
+    for (const [cx, cz] of [...CAVE_CHUNKS].reverse()) w2.ensureChunk(cx, cz);
+    for (const [cx, cz] of CAVE_CHUNKS) expect(w2.getChunk(cx, cz).blocks).toEqual(w1.getChunk(cx, cz).blocks);
+
+    // Cave layouts differ between seeds. Below y = 20 (under sea level) AIR can only be cave air:
+    // above a column's surface there is water, so comparing AIR there compares caves alone.
+    const c = createTerrain(SEED + 1);
+    const below = 20 * CHUNK_SIZE * CHUNK_SIZE;
+    let differ = 0;
+    for (const [cx, cz] of CAVE_CHUNKS) {
+      const da = a.generateChunk(cx, cz);
+      const dc = c.generateChunk(cx, cz);
+      for (let i = 0; i < below; i++) if ((da[i] === B.AIR) !== (dc[i] === B.AIR)) differ++;
+    }
+    expect(differ).toBeGreaterThan(1000);
+  });
+
+  it('add at most ~50% triangles to the meshed spawn area', () => {
+    const results = [];
+    for (const seed of [SEED, 20240611, 987654321]) {
+      const tris = [];
+      for (const caves of [false, true]) {
+        const w = new World(seed);
+        w.terrain = createTerrain(seed, { caves });
+        w.generateAround(8, 8, GEN_DISTANCE);
+        const chunks = [...w.consumeDirtyChunks()];
+        expect(chunks.length).toBeGreaterThan(100); // every chunk within RENDER_DISTANCE
+        let n = 0;
+        for (const ch of chunks) {
+          const g = buildChunkGeometry((x, y, z) => w.getBlock(x, y, z), ch.cx, ch.cz);
+          n += (g.solid.indices.length + g.water.indices.length) / 3;
+        }
+        tris.push(n);
+      }
+      results.push(tris[1] / tris[0]);
+      console.log(
+        `caves: seed ${seed}, spawn area (radius ${RENDER_DISTANCE}) triangles ${tris[0]} without caves, ` +
+          `${tris[1]} with (+${((tris[1] / tris[0] - 1) * 100).toFixed(1)}%)`,
+      );
+    }
+    for (const r of results) {
+      expect(r).toBeGreaterThan(1.05); // caves are visible in the mesh at all
+      expect(r).toBeLessThan(1.5);
+    }
+  });
 });
 
 describe('terrain performance', () => {
