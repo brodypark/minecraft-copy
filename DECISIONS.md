@@ -35,3 +35,4 @@ The manager's decision log: choices made during the build, with the reason for e
   4. The smoke test now actually plays (walk, jump, fly, break/place, F3) while watching the console.
   5. `tests/config.test.js` asserts all 22 section 5.1 values.
   6. Respawn re-places the player 2 blocks above the spawn column's current top block once that chunk has data, so building over spawn can't trap a respawning player inside blocks.
+- **Renamed to "Minecraft Copy" (owner request, after the build):** the page title, pause menu, F3 header, README, package name and the PROJECT.md title and section 3 rule were updated. Two internal identifiers deliberately keep the old name: the localStorage key `voxel-sandbox-save`, so existing saves still load, and the star-field seed `voxel-sandbox-stars`, so the night sky looks the same. All textures, sounds and fonts are still original and generated in code.

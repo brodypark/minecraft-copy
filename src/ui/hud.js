@@ -88,7 +88,7 @@ export function createHud(container, { onResume, onNewWorld } = {}) {
   const panel = el('div', 'vs-pause__panel');
   const title = el('h1', 'vs-pause__title');
   title.innerHTML = EMBLEM_SVG;
-  title.appendChild(el('span', '', 'Voxel Sandbox'));
+  title.appendChild(el('span', '', 'Minecraft Copy'));
   const cta = el('div', 'vs-pause__cta', 'Click to play');
   const controlsHeading = el('h2', 'vs-pause__heading', 'Controls');
   const controlsList = buildControlsList();

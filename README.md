@@ -1,4 +1,4 @@
-# Voxel Sandbox
+# Minecraft Copy
 
 A first-person voxel sandbox game that runs in the browser. Explore procedurally generated, endless-feeling terrain with hills, lakes, beaches, trees and caves. Break and place blocks, walk, swim or fly, and watch a full day/night cycle. Your world saves automatically.
 

@@ -166,7 +166,7 @@ export function createDebugOverlay(container) {
 
   const header = document.createElement('div');
   header.className = 'vs-debug__header';
-  header.textContent = 'Voxel Sandbox';
+  header.textContent = 'Minecraft Copy';
   const hint = document.createElement('span');
   hint.className = 'vs-debug__hint';
   hint.textContent = 'F3';

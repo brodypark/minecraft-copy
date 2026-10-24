@@ -1,4 +1,4 @@
-# Voxel Sandbox — PROJECT.md
+# Minecraft Copy — PROJECT.md
 
 A first-person voxel sandbox game that runs in the browser. Procedurally generated infinite-feeling terrain, break and place blocks, walking physics, day/night cycle, save/load. Built with Three.js + Vite.
 
@@ -32,7 +32,7 @@ You are the **manager agent**. You plan, delegate to sub-agents, verify, commit,
 
 ## 3. Hard constraints
 
-- **No copyrighted material.** Do not use the word "Minecraft", its textures, sounds, fonts, or logos. Game title: **Voxel Sandbox**.
+- **No copyrighted material.** Do not use Minecraft's textures, sounds, fonts, or logos. Game title: **Minecraft Copy** (renamed from "Voxel Sandbox" by the project owner after the build).
 - **All textures are generated in code** at runtime on a `<canvas>` (see Task 2). No image files required.
 - `npm install && npm run dev` must start the game. `npm run build` must pass. `npm test` must pass.
 - Target 60 FPS on an integrated-GPU laptop at render distance 6.
