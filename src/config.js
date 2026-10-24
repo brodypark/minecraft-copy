@@ -21,3 +21,23 @@ export const MOUSE_SENSITIVITY = 0.0022;
 export const DAY_LENGTH_SECONDS = 600;
 export const TILE_SIZE = 16;           // px per texture tile
 export const ATLAS_TILES = 16;         // tiles per row/column (256x256 atlas)
+
+// Physics tuning (used by src/player/physics.js)
+export const MAX_DT = 0.05;              // s, largest dt honored per call
+export const MAX_SUBSTEP = 1 / 60;       // s, largest integration step
+export const COLLISION_EPS = 1e-4;       // blocks, gap left between the AABB and a block face
+export const SKIN_TOL = 0.01;            // blocks, penetration that gets pushed back out
+export const GROUND_ACCEL = 20;          // 1/s, horizontal approach rate on the ground
+export const AIR_ACCEL = 4;              // 1/s, horizontal approach rate in the air
+export const WATER_ACCEL = 8;            // 1/s, horizontal approach rate in water
+export const FLY_ACCEL = 10;             // 1/s, approach rate (all axes) in fly mode
+export const MAX_FALL_SPEED = 60;        // blocks/s, terminal speed in air
+export const WATER_SAMPLE_HEIGHT = 0.4;  // blocks above the feet that decide inWater
+export const WATER_GRAVITY_SCALE = 0.3;  // fraction of GRAVITY applied in water
+export const WATER_SPEED_SCALE = 0.5;    // horizontal speed multiplier in water
+export const WATER_SINK_SPEED = 2;       // blocks/s, terminal sink speed in water
+export const WATER_DRAG = 10;            // 1/s, how fast a faster fall is slowed to sink speed
+export const SWIM_UP_SPEED = 3.5;        // blocks/s, rise speed while holding jump in water
+export const SWIM_ACCEL = 40;            // blocks/s^2, acceleration toward SWIM_UP_SPEED
+export const WATER_EXIT_SPEED = 9;       // blocks/s, shoreline boost (same as a jump)
+export const LANDING_ENDS_FLIGHT = true; // touching ground while flying turns flying off

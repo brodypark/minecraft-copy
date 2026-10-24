@@ -22,8 +22,8 @@
     },
     {
       "name": "Physics",
-      "status": "working",
-      "task": "Task 4: AABB physics + collision"
+      "status": "done",
+      "task": "Task 4 verified: 43 physics tests pass"
     },
     {
       "name": "Agent 5",

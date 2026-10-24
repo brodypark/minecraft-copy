@@ -264,7 +264,7 @@ Parallel groups run in order. Tasks within a group can run at the same time. Eac
   - Implement the World API from 5.4 (streaming logic with budgets, dirty tracking, border-neighbor dirtying) and terrain per section 6. Use the block ID enum from `blocks.js` (don't wait for the full registry).
   - Acceptance: coords and terrain tests pass, including determinism, negative coordinates, and cross-border trees; generating a 13x13 chunk area completes in under 1.5 s in a test (log the time).
 
-- [ ] **4. Player physics and collision** — files: `src/player/physics.js`, `tests/physics.test.js`
+- [x] **4. Player physics and collision** — files: `src/player/physics.js`, `tests/physics.test.js`
   - Implement `stepPlayer` per 5.6 with walking, sprint, jump, gravity, fly mode, and basic water behavior (in water: reduced gravity, slower movement, Space swims up). Tested against a fake in-memory world.
   - Acceptance: every physics test in section 8 passes.
 
