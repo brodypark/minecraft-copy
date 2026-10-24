@@ -309,7 +309,7 @@ Parallel groups run in order. Tasks within a group can run at the same time. Eac
 
 ### Group G
 
-- [ ] **12. Final QA and cleanup**
+- [x] **12. Final QA and cleanup**
   - Run `npm test` and `npm run build` clean. Remove dead code, debug logs, and unused files. Make sure no file references the word "Minecraft".
   - Spawn an **independent reviewer sub-agent** that hasn't seen the build process. It reads the code and this file, checks every acceptance criterion and the contracts in section 5, and reports mismatches. Fix what it finds (re-verify).
   - Finish `README.md`: controls, how to run, how to build, project structure, known limitations.

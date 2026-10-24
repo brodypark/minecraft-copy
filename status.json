@@ -1,8 +1,8 @@
 {
   "manager": {
     "name": "Manager",
-    "status": "working",
-    "task": "Fixing reviewer findings (6)"
+    "status": "done",
+    "task": "All 12 tasks done: 284 tests, build + smoke pass"
   },
   "agents": [
     {
@@ -33,7 +33,7 @@
     {
       "name": "Reviewer",
       "status": "done",
-      "task": "Review done: 6 findings reported"
+      "task": "Task 12: review fixes verified, fresh clone OK"
     }
   ]
 }
