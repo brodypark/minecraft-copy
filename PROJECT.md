@@ -260,7 +260,7 @@ Parallel groups run in order. Tasks within a group can run at the same time. Eac
   - Fill in the full registry (section 5.2). Export `tileUV(tileIndex)` returning inset UV rect.
   - Acceptance: blocks tests pass; a temporary debug page or test confirms every tile index is distinct and in range. Add "inspect atlas visually" to `MANUAL_CHECKS.md`.
 
-- [ ] **3. World storage and terrain generation** — files: `src/world/chunk.js`, `src/world/world.js`, `src/world/terrain.js`, `tests/coords.test.js`, `tests/terrain.test.js`
+- [x] **3. World storage and terrain generation** — files: `src/world/chunk.js`, `src/world/world.js`, `src/world/terrain.js`, `tests/coords.test.js`, `tests/terrain.test.js`
   - Implement the World API from 5.4 (streaming logic with budgets, dirty tracking, border-neighbor dirtying) and terrain per section 6. Use the block ID enum from `blocks.js` (don't wait for the full registry).
   - Acceptance: coords and terrain tests pass, including determinism, negative coordinates, and cross-border trees; generating a 13x13 chunk area completes in under 1.5 s in a test (log the time).
 

@@ -17,8 +17,8 @@
     },
     {
       "name": "Terrain",
-      "status": "working",
-      "task": "Task 3: chunk storage, World API, terrain gen"
+      "status": "done",
+      "task": "Task 3 verified: 41 tests, 13x13 gen 17 ms"
     },
     {
       "name": "Physics",
