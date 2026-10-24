@@ -2,7 +2,7 @@
   "manager": {
     "name": "Manager",
     "status": "working",
-    "task": "Group A: delegated Task 1 to Scaffold"
+    "task": "Group B: Atlas, Terrain, Physics running in parallel"
   },
   "agents": [
     {
@@ -11,19 +11,19 @@
       "task": "Task 1 verified: test + build pass"
     },
     {
-      "name": "Agent 2",
-      "status": "idle",
-      "task": ""
+      "name": "Atlas",
+      "status": "done",
+      "task": "Task 2 verified: 13 tiles, tests pass, atlas inspected"
     },
     {
-      "name": "Agent 3",
-      "status": "idle",
-      "task": ""
+      "name": "Terrain",
+      "status": "working",
+      "task": "Task 3: chunk storage, World API, terrain gen"
     },
     {
-      "name": "Agent 4",
-      "status": "idle",
-      "task": ""
+      "name": "Physics",
+      "status": "working",
+      "task": "Task 4: AABB physics + collision"
     },
     {
       "name": "Agent 5",

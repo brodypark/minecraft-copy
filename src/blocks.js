@@ -1,25 +1,29 @@
 // Block IDs and the block registry (PROJECT.md section 5.2).
+// Pure module: no three.js or DOM imports (the mesher and physics use it).
+
+import { TILES as T } from './render/tiles.js';
 
 export const B = {
   AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, COBBLESTONE: 4, SAND: 5,
   LOG: 6, PLANKS: 7, LEAVES: 8, GLASS: 9, WATER: 10, BEDROCK: 11,
 };
 
-// Registry indexed by block id. `tiles` are atlas tile indices.
-// TODO(Task 2): tiles are placeholders (all 0); Task 2 assigns the real atlas tiles.
+// Registry indexed by block id. `tiles` are atlas tile indices (see render/tiles.js).
+// Air is never meshed, so its tiles are unused placeholders.
+const all = (t) => ({ top: t, bottom: t, side: t });
 export const BLOCKS = [
-  { id: B.AIR,         name: 'Air',         solid: false, transparent: true,  placeable: false, breakable: false, tiles: { top: 0, bottom: 0, side: 0 } },
-  { id: B.GRASS,       name: 'Grass',       solid: true,  transparent: false, placeable: true,  breakable: true,  tiles: { top: 0, bottom: 0, side: 0 } },
-  { id: B.DIRT,        name: 'Dirt',        solid: true,  transparent: false, placeable: true,  breakable: true,  tiles: { top: 0, bottom: 0, side: 0 } },
-  { id: B.STONE,       name: 'Stone',       solid: true,  transparent: false, placeable: true,  breakable: true,  tiles: { top: 0, bottom: 0, side: 0 } },
-  { id: B.COBBLESTONE, name: 'Cobblestone', solid: true,  transparent: false, placeable: true,  breakable: true,  tiles: { top: 0, bottom: 0, side: 0 } },
-  { id: B.SAND,        name: 'Sand',        solid: true,  transparent: false, placeable: true,  breakable: true,  tiles: { top: 0, bottom: 0, side: 0 } },
-  { id: B.LOG,         name: 'Log',         solid: true,  transparent: false, placeable: true,  breakable: true,  tiles: { top: 0, bottom: 0, side: 0 } },
-  { id: B.PLANKS,      name: 'Planks',      solid: true,  transparent: false, placeable: true,  breakable: true,  tiles: { top: 0, bottom: 0, side: 0 } },
-  { id: B.LEAVES,      name: 'Leaves',      solid: true,  transparent: true,  placeable: true,  breakable: true,  tiles: { top: 0, bottom: 0, side: 0 } },
-  { id: B.GLASS,       name: 'Glass',       solid: true,  transparent: true,  placeable: true,  breakable: true,  tiles: { top: 0, bottom: 0, side: 0 } },
-  { id: B.WATER,       name: 'Water',       solid: false, transparent: true,  placeable: false, breakable: false, tiles: { top: 0, bottom: 0, side: 0 } },
-  { id: B.BEDROCK,     name: 'Bedrock',     solid: true,  transparent: false, placeable: false, breakable: false, tiles: { top: 0, bottom: 0, side: 0 } },
+  { id: B.AIR,         name: 'Air',         solid: false, transparent: true,  placeable: false, breakable: false, tiles: { top: 0, bottom: 0, side: 0 } /* unused */ },
+  { id: B.GRASS,       name: 'Grass',       solid: true,  transparent: false, placeable: true,  breakable: true,  tiles: { top: T.GRASS_TOP, bottom: T.DIRT, side: T.GRASS_SIDE } },
+  { id: B.DIRT,        name: 'Dirt',        solid: true,  transparent: false, placeable: true,  breakable: true,  tiles: all(T.DIRT) },
+  { id: B.STONE,       name: 'Stone',       solid: true,  transparent: false, placeable: true,  breakable: true,  tiles: all(T.STONE) },
+  { id: B.COBBLESTONE, name: 'Cobblestone', solid: true,  transparent: false, placeable: true,  breakable: true,  tiles: all(T.COBBLESTONE) },
+  { id: B.SAND,        name: 'Sand',        solid: true,  transparent: false, placeable: true,  breakable: true,  tiles: all(T.SAND) },
+  { id: B.LOG,         name: 'Log',         solid: true,  transparent: false, placeable: true,  breakable: true,  tiles: { top: T.LOG_TOP, bottom: T.LOG_TOP, side: T.LOG_SIDE } },
+  { id: B.PLANKS,      name: 'Planks',      solid: true,  transparent: false, placeable: true,  breakable: true,  tiles: all(T.PLANKS) },
+  { id: B.LEAVES,      name: 'Leaves',      solid: true,  transparent: true,  placeable: true,  breakable: true,  tiles: all(T.LEAVES) },
+  { id: B.GLASS,       name: 'Glass',       solid: true,  transparent: true,  placeable: true,  breakable: true,  tiles: all(T.GLASS) },
+  { id: B.WATER,       name: 'Water',       solid: false, transparent: true,  placeable: false, breakable: false, tiles: all(T.WATER) },
+  { id: B.BEDROCK,     name: 'Bedrock',     solid: true,  transparent: false, placeable: false, breakable: false, tiles: all(T.BEDROCK) },
 ];
 
 // Hotbar order, slots 1-9.

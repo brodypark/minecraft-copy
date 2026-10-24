@@ -254,7 +254,7 @@ Parallel groups run in order. Tasks within a group can run at the same time. Eac
 
 ### Group B (parallel; each depends only on Task 1)
 
-- [ ] **2. Texture atlas and block registry** — files: `src/render/atlas.js`, `src/blocks.js`, `tests/blocks.test.js`
+- [x] **2. Texture atlas and block registry** — files: `src/render/atlas.js`, `src/blocks.js`, `tests/blocks.test.js`
   - Generate a 256x256 canvas atlas of 16x16 tiles with pixel-art style procedural textures: grass top, grass side, dirt, stone, cobblestone, sand, log side (bark), log top (rings), planks, leaves (with transparent holes), glass (transparent with border), water, bedrock. Seeded noise for variation so it's deterministic.
   - `THREE.CanvasTexture` with `NearestFilter`, no mipmaps, `colorSpace = SRGBColorSpace`.
   - Fill in the full registry (section 5.2). Export `tileUV(tileIndex)` returning inset UV rect.
