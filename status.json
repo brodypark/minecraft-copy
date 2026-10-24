@@ -1,0 +1,39 @@
+{
+  "manager": {
+    "name": "Manager",
+    "status": "working",
+    "task": "Group A: delegated Task 1 to Scaffold"
+  },
+  "agents": [
+    {
+      "name": "Scaffold",
+      "status": "done",
+      "task": "Task 1 verified: test + build pass"
+    },
+    {
+      "name": "Agent 2",
+      "status": "idle",
+      "task": ""
+    },
+    {
+      "name": "Agent 3",
+      "status": "idle",
+      "task": ""
+    },
+    {
+      "name": "Agent 4",
+      "status": "idle",
+      "task": ""
+    },
+    {
+      "name": "Agent 5",
+      "status": "idle",
+      "task": ""
+    },
+    {
+      "name": "Agent 6",
+      "status": "idle",
+      "task": ""
+    }
+  ]
+}

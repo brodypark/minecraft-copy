@@ -1,0 +1,23 @@
+export const CHUNK_SIZE = 16;          // x and z footprint
+export const WORLD_HEIGHT = 64;        // y range 0..63
+export const SEA_LEVEL = 22;
+export const RENDER_DISTANCE = 6;      // radius in chunks that get meshed
+export const GEN_DISTANCE = RENDER_DISTANCE + 1;   // radius that gets block data (needed so border faces can be culled)
+export const UNLOAD_DISTANCE = RENDER_DISTANCE + 3;
+export const CHUNK_GEN_PER_FRAME = 2;
+export const CHUNK_MESH_PER_FRAME = 2;
+
+export const PLAYER_WIDTH = 0.6;
+export const PLAYER_HEIGHT = 1.8;
+export const PLAYER_EYE = 1.62;
+export const GRAVITY = 32;             // blocks/s^2
+export const JUMP_SPEED = 9.0;         // ~1.27 block jump
+export const WALK_SPEED = 4.3;
+export const SPRINT_SPEED = 5.6;
+export const FLY_SPEED = 12;
+export const REACH = 5;
+export const FOV = 75;
+export const MOUSE_SENSITIVITY = 0.0022;
+export const DAY_LENGTH_SECONDS = 600;
+export const TILE_SIZE = 16;           // px per texture tile
+export const ATLAS_TILES = 16;         // tiles per row/column (256x256 atlas)
