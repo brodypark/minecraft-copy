@@ -270,7 +270,7 @@ Parallel groups run in order. Tasks within a group can run at the same time. Eac
 
 ### Group C
 
-- [ ] **5. Mesher and chunk rendering** — files: `src/render/mesher.js`, `src/render/chunkMeshes.js`, `tests/mesher.test.js`
+- [x] **5. Mesher and chunk rendering** — files: `src/render/mesher.js`, `src/render/chunkMeshes.js`, `tests/mesher.test.js`
   - Pure `buildChunkGeometry` per 5.5. `chunkMeshes.js` converts output to `THREE.BufferGeometry` + meshes (solid with `alphaTest`, water transparent), sets bounding spheres so frustum culling works, and disposes geometry on removal.
   - Acceptance: mesher tests pass; a manager-wired scene renders a visible terrain patch (note visual check in `MANUAL_CHECKS.md`).
 

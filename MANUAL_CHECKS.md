@@ -10,3 +10,4 @@ These need a human to verify by running the game; they are not covered by automa
 - [ ] Jumping onto a 1-block step feels natural; walking into one stops you (there is no auto-step by design) (Task 4).
 - [ ] Water: swimming at the surface bobs gently, holding Space swims up, and swimming to a 1-block shore while holding Space lifts you out (Task 4).
 - [ ] Fly mode: double-tap Space toggles flight; Space rises, Shift descends; flying down onto the ground ends flight cleanly (Task 4).
+- [ ] Terrain renders: no missing faces, grass sides show green at the top, no colored seams between textures, water is translucent with the lake bed visible, leaves show holes (Task 5; the manager confirmed this from headless screenshots, so a human pass on a real GPU is still needed).

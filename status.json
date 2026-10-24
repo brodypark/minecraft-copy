@@ -2,7 +2,7 @@
   "manager": {
     "name": "Manager",
     "status": "working",
-    "task": "Group B: Atlas, Terrain, Physics running in parallel"
+    "task": "Group C: Mesher running; will wire a test scene after"
   },
   "agents": [
     {
@@ -26,9 +26,9 @@
       "task": "Task 4 verified: 43 physics tests pass"
     },
     {
-      "name": "Agent 5",
-      "status": "idle",
-      "task": ""
+      "name": "Mesher",
+      "status": "done",
+      "task": "Task 5 verified: 26 tests, terrain renders"
     },
     {
       "name": "Agent 6",
