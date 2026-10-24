@@ -11,3 +11,8 @@ These need a human to verify by running the game; they are not covered by automa
 - [ ] Water: swimming at the surface bobs gently, holding Space swims up, and swimming to a 1-block shore while holding Space lifts you out (Task 4).
 - [ ] Fly mode: double-tap Space toggles flight; Space rises, Shift descends; flying down onto the ground ends flight cleanly (Task 4).
 - [ ] Terrain renders: no missing faces, grass sides show green at the top, no colored seams between textures, water is translucent with the lake bed visible, leaves show holes (Task 5; the manager confirmed this from headless screenshots, so a human pass on a real GPU is still needed).
+- [ ] Pointer lock: clicking locks the mouse; Esc releases it and shows the pause screen; clicking again resumes. Chrome refuses a re-lock for about 1 s after Esc, so an immediate click may need repeating (Task 6).
+- [ ] Mouse look direction and sensitivity feel right; looking straight up or down stops at the limit without flipping (Task 6).
+- [ ] Tab switch / alt-tab while holding W: on return the player isn't still walking and there is no big jump in position (Task 6).
+- [ ] Fog hides chunks popping in at the edge of the view while walking or flying (Task 6).
+- [ ] Walking and flying fast across chunk borders never stutters, falls through the ground, or shows holes along borders (Task 6).

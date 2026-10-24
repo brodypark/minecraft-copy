@@ -276,7 +276,7 @@ Parallel groups run in order. Tasks within a group can run at the same time. Eac
 
 ### Group D
 
-- [ ] **6. Controls, camera, game loop integration** — files: `src/player/controls.js`, `src/player/player.js`, `src/render/renderer.js`, `src/main.js` (this task may edit `main.js`)
+- [x] **6. Controls, camera, game loop integration** — files: `src/player/controls.js`, `src/player/player.js`, `src/render/renderer.js`, `src/main.js` (this task may edit `main.js`)
   - Pointer lock + input state, yaw/pitch camera, spawn logic from section 7, streaming loop wired (generate, mesh, unload), fixed-order frame: input, physics, world.update, mesh budget, render. Pause on pointer-lock loss. Void-fall respawn.
   - Acceptance: build passes; the game boots into terrain, the player can walk/jump/fly, collides with terrain, doesn't fall through the world on load or while moving fast across chunk borders (add a regression test for "player on a chunk border" if physics allows). Add feel checks to `MANUAL_CHECKS.md`.
 

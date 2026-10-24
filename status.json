@@ -2,7 +2,7 @@
   "manager": {
     "name": "Manager",
     "status": "working",
-    "task": "Group C: Mesher running; will wire a test scene after"
+    "task": "Group D: Player integration running"
   },
   "agents": [
     {
@@ -31,9 +31,9 @@
       "task": "Task 5 verified: 26 tests, terrain renders"
     },
     {
-      "name": "Agent 6",
-      "status": "idle",
-      "task": ""
+      "name": "Player",
+      "status": "done",
+      "task": "Task 6 verified: walk/jump/fly/stream headless"
     }
   ]
 }

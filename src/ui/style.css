@@ -16,3 +16,46 @@ body {
 canvas {
   display: block;
 }
+
+/* TEMPORARY pause overlay (main.js section 5). Task 8 replaces it with the real HUD/pause menu. */
+.temp-pause {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 14, 24, 0.55);
+  color: #f2f2f2;
+  font: 15px/1.5 system-ui, sans-serif;
+  cursor: pointer;
+  user-select: none;
+  z-index: 10;
+}
+
+.temp-pause--hidden {
+  display: none;
+}
+
+.temp-pause__panel {
+  padding: 24px 32px;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.temp-pause__panel h1 {
+  margin: 0 0 4px;
+  font-size: 28px;
+}
+
+.temp-pause__cta {
+  margin: 0 0 16px;
+  font-weight: 600;
+}
+
+.temp-pause__panel ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}

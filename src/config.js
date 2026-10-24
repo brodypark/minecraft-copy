@@ -58,3 +58,10 @@ export const FBM_OCTAVES = 4;
 export const FBM_PERSISTENCE = 0.5;
 export const FBM_LACUNARITY = 2;
 export const TREE_CHANCE = 110;          // about 1 in 110 qualifying grass columns grows a tree
+
+// Rendering (used by src/render/renderer.js and src/render/sky.js)
+export const MAX_PIXEL_RATIO = 2;        // a devicePixelRatio of 3 tanks FPS on laptops
+export const CAMERA_NEAR = 0.1;
+export const DAY_SKY_COLOR = 0x87b8ff;
+export const FOG_NEAR_FACTOR = 0.55;     // fog near = factor * RENDER_DISTANCE * CHUNK_SIZE
+export const FOG_FAR_FACTOR = 0.95;      // fog far  = factor * RENDER_DISTANCE * CHUNK_SIZE
