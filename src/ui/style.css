@@ -17,45 +17,493 @@ canvas {
   display: block;
 }
 
-/* TEMPORARY pause overlay (main.js section 5). Task 8 replaces it with the real HUD/pause menu. */
-.temp-pause {
+/* ==========================================================================
+   UI layer (Task 8): HUD, hotbar, debug overlay, pause menu.
+   Everything sits over the game canvas and ignores the pointer, except the
+   pause menu and its buttons.
+   ========================================================================== */
+
+:root {
+  --vs-font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --vs-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+  --vs-text: #f3f5f8;
+  --vs-muted: #a8b1bf;
+  --vs-accent: #7cc75a;
+  --vs-accent-deep: #4f9a37;
+  --vs-danger: #d9544a;
+  --vs-panel: rgba(18, 21, 30, 0.9);
+  --vs-line: rgba(255, 255, 255, 0.1);
+
+  /* Hotbar slot size shrinks on narrow windows; icons are 2/3 of a slot (32 px at full size). */
+  --vs-slot: clamp(30px, 9vw, 48px);
+  --vs-icon: calc(var(--vs-slot) * 2 / 3);
+}
+
+.vs-ui {
   position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(10, 14, 24, 0.55);
-  color: #f2f2f2;
-  font: 15px/1.5 system-ui, sans-serif;
-  cursor: pointer;
+  pointer-events: none;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  font-family: var(--vs-font);
+  color: var(--vs-text);
+}
+
+.vs-ui *,
+.vs-ui *::before,
+.vs-ui *::after {
+  box-sizing: border-box;
+}
+
+/* ---- HUD root + crosshair ----------------------------------------------- */
+
+.vs-hud {
+  inset: 0;
   z-index: 10;
 }
 
-.temp-pause--hidden {
+.vs-crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+}
+
+.vs-crosshair svg {
+  display: block;
+}
+
+.vs-crosshair.is-hidden {
   display: none;
 }
 
-.temp-pause__panel {
-  padding: 24px 32px;
-  background: rgba(0, 0, 0, 0.45);
-  border-radius: 8px;
+/* ---- Pause menu ---------------------------------------------------------- */
+
+.vs-pause {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow-y: auto;
+  pointer-events: auto;
+  cursor: pointer;
+  background:
+    radial-gradient(ellipse at center, rgba(8, 11, 18, 0.35) 0%, rgba(4, 6, 10, 0.78) 100%);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  opacity: 1;
+  transition: opacity 140ms ease;
+}
+
+.vs-pause.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.vs-pause__panel {
+  width: min(520px, 100%);
+  margin: auto;
+  padding: 26px 30px 22px;
+  background: linear-gradient(180deg, rgba(30, 35, 48, 0.94), var(--vs-panel));
+  border: 1px solid var(--vs-line);
+  border-radius: 12px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06) inset,
+    0 24px 64px rgba(0, 0, 0, 0.55);
   text-align: center;
 }
 
-.temp-pause__panel h1 {
-  margin: 0 0 4px;
-  font-size: 28px;
+.vs-pause__title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 0;
+  font-size: clamp(26px, 6vw, 38px);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1.1;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
 }
 
-.temp-pause__cta {
-  margin: 0 0 16px;
+.vs-pause__emblem {
+  width: 1.1em;
+  height: 1.1em;
+  flex: none;
+  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.4));
+}
+
+.vs-pause__cta {
+  display: inline-block;
+  margin: 18px 0 20px;
+  padding: 11px 30px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #8fd66c, var(--vs-accent-deep));
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  box-shadow:
+    0 -3px 0 rgba(0, 0, 0, 0.22) inset,
+    0 2px 0 rgba(255, 255, 255, 0.25) inset,
+    0 0 0 0 rgba(124, 199, 90, 0.5);
+  color: #10200a;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  animation: vs-cta-pulse 2.2s ease-in-out infinite;
+}
+
+.vs-pause:hover .vs-pause__cta {
+  filter: brightness(1.06);
+}
+
+@keyframes vs-cta-pulse {
+  0%, 100% {
+    box-shadow:
+      0 -3px 0 rgba(0, 0, 0, 0.22) inset,
+      0 2px 0 rgba(255, 255, 255, 0.25) inset,
+      0 0 0 0 rgba(124, 199, 90, 0.45);
+  }
+  50% {
+    box-shadow:
+      0 -3px 0 rgba(0, 0, 0, 0.22) inset,
+      0 2px 0 rgba(255, 255, 255, 0.25) inset,
+      0 0 0 9px rgba(124, 199, 90, 0);
+  }
+}
+
+.vs-pause__heading {
+  margin: 0 0 8px;
+  color: var(--vs-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.vs-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 18px;
+  margin: 0;
+  padding: 12px 14px;
+  list-style: none;
+  text-align: left;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--vs-line);
+  border-radius: 8px;
+}
+
+.vs-controls__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 30px;
+  font-size: 13px;
+}
+
+.vs-controls__keys {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+}
+
+.vs-controls__sep {
+  color: var(--vs-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.vs-controls__action {
+  color: var(--vs-muted);
+  text-align: right;
+}
+
+.vs-key {
+  display: inline-block;
+  min-width: 22px;
+  padding: 2px 6px 1px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-bottom-width: 3px;
+  border-bottom-color: rgba(0, 0, 0, 0.45);
+  border-radius: 5px;
+  background: linear-gradient(180deg, #3a4153, #2c3241);
+  color: var(--vs-text);
+  font-family: var(--vs-font);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.vs-pause__footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.vs-confirm {
+  cursor: default;
+  padding: 12px 14px;
+  border: 1px solid rgba(217, 84, 74, 0.45);
+  border-radius: 8px;
+  background: rgba(217, 84, 74, 0.12);
+}
+
+.vs-confirm[hidden],
+.vs-btn[hidden] {
+  display: none;
+}
+
+.vs-confirm__text {
+  margin: 0 0 10px;
+  font-size: 14px;
   font-weight: 600;
 }
 
-.temp-pause__panel ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  text-align: left;
+.vs-confirm__buttons {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* ---- Buttons ------------------------------------------------------------- */
+
+.vs-btn {
+  appearance: none;
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 8px 18px;
+  border: 1px solid rgba(0, 0, 0, 0.5);
+  border-radius: 7px;
+  background: linear-gradient(180deg, #485066, #363d4f);
+  box-shadow:
+    0 -3px 0 rgba(0, 0, 0, 0.25) inset,
+    0 1px 0 rgba(255, 255, 255, 0.14) inset;
+  color: var(--vs-text);
+  font: 700 14px/1.2 var(--vs-font);
+  user-select: none;
+  -webkit-user-select: none;
+  transition: filter 80ms ease, transform 80ms ease;
+}
+
+.vs-btn:hover {
+  filter: brightness(1.15);
+}
+
+.vs-btn:active {
+  transform: translateY(1px);
+  box-shadow:
+    0 -1px 0 rgba(0, 0, 0, 0.25) inset,
+    0 1px 0 rgba(255, 255, 255, 0.1) inset;
+}
+
+.vs-btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.vs-btn--quiet {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--vs-line);
+  box-shadow: none;
+  color: var(--vs-muted);
+}
+
+.vs-btn--quiet:hover {
+  color: var(--vs-text);
+  background: rgba(255, 255, 255, 0.1);
+  filter: none;
+}
+
+.vs-btn--danger {
+  background: linear-gradient(180deg, #e56a5f, #b9443b);
+}
+
+/* ---- Hotbar -------------------------------------------------------------- */
+
+.vs-hotbar-wrap {
+  left: 50%;
+  bottom: max(10px, env(safe-area-inset-bottom));
+  z-index: 9; /* below .vs-hud so the pause menu covers it */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translateX(-50%);
+}
+
+.vs-hotbar__name {
+  min-height: 1.5em;
+  margin-bottom: 8px;
+  padding: 2px 10px;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.38);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  text-shadow: 0 1px 0 #000, 0 0 6px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  transition: opacity 450ms ease;
+}
+
+.vs-hotbar__name.is-visible {
+  opacity: 1;
+  transition: none;
+}
+
+.vs-hotbar {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 2px solid rgba(0, 0, 0, 0.7);
+  border-radius: 6px;
+  background: rgba(14, 16, 22, 0.55);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.08) inset,
+    0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.vs-slot {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--vs-slot);
+  height: var(--vs-slot);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
+}
+
+.vs-slot.is-selected {
+  z-index: 1;
+  border-color: #fff;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08));
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.75),
+    0 0 12px rgba(255, 255, 255, 0.35);
+}
+
+.vs-slot__icon {
+  width: var(--vs-icon);
+  height: var(--vs-icon);
+  image-rendering: pixelated; /* nearest neighbor when the 64 px canvas is scaled */
+}
+
+.vs-slot__num {
+  position: absolute;
+  top: 1px;
+  left: 3px;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.9);
+}
+
+.vs-slot.is-selected .vs-slot__num {
+  color: #fff;
+}
+
+/* ---- Debug overlay (F3) ---------------------------------------------------- */
+
+.vs-debug {
+  top: 8px;
+  left: 8px;
+  z-index: 9; /* below .vs-hud so the pause menu covers it */
+  max-width: calc(100vw - 16px);
+  padding: 7px 10px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.62);
+  font: 12px/1.5 var(--vs-mono);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.8);
+  white-space: pre;
+  overflow: hidden;
+}
+
+.vs-debug.is-hidden {
+  display: none;
+}
+
+.vs-debug__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 3px;
+  color: var(--vs-accent);
+  font-weight: 700;
+}
+
+.vs-debug__hint {
+  color: var(--vs-muted);
+  font-weight: 400;
+}
+
+.vs-debug__row {
+  display: flex;
+  gap: 10px;
+}
+
+.vs-debug__label {
+  flex: none;
+  width: 7ch;
+  color: var(--vs-muted);
+}
+
+.vs-debug__value {
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Small windows --------------------------------------------------------- */
+
+@media (max-width: 560px) {
+  .vs-pause__panel {
+    padding: 20px 16px 16px;
+  }
+
+  .vs-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .vs-hotbar {
+    gap: 1px;
+    padding: 2px;
+  }
+
+  .vs-slot__num {
+    font-size: 9px;
+  }
+}
+
+@media (max-height: 520px) {
+  .vs-pause__cta {
+    margin: 10px 0 12px;
+    padding: 8px 24px;
+  }
+
+  .vs-controls__item {
+    min-height: 24px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vs-pause__cta {
+    animation: none;
+  }
+
+  .vs-pause,
+  .vs-hotbar__name {
+    transition: none;
+  }
 }
