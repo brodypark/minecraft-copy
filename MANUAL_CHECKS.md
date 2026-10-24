@@ -1,8 +1,9 @@
 # Manual checks
 
-These need a human to verify by running the game; they are not covered by automated tests.
+These need a human to verify by running the game (`npm install && npm run dev`); automated tests don't cover them. Headless screenshots taken during the build confirmed the basics, but feel, real-GPU rendering and performance need a person.
 
-- [ ] `npm run dev`: a spinning test cube appears and resizes with the window (Task 1)
+- [ ] Console stays clean: open DevTools, play for a few minutes (move, fly, edit, pause/resume, F3), and check that no errors or warnings appear. (`npm run test:smoke` checks the first 5 s headless.)
+- [ ] Window resize: dragging the window to different sizes keeps the view sharp and correctly proportioned, with the crosshair centered and the hotbar at the bottom center (Task 1/6).
 - [ ] Inspect the texture atlas (Task 2): with `npm run dev` open, paste into the browser console:
   `import('/src/render/atlas.js').then(m=>{const c=m.createAtlasCanvas();c.style.cssText='position:fixed;top:0;left:0;width:1024px;image-rendering:pixelated;background:repeating-conic-gradient(#888 0 25%,#ccc 0 50%) 0 0/16px 16px;z-index:9999';document.body.appendChild(c)})`
   All 13 tiles in the top row should be recognizable (grass top, grass side, dirt, stone, cobblestone, sand, bark, log rings, planks, leaves, glass, water, bedrock), and the checker background should show through the holes in leaves and glass. (The manager checked this once from a headless screenshot; a human should still look at it.)
@@ -28,4 +29,4 @@ These need a human to verify by running the game; they are not covered by automa
 - [ ] New World: pause → New World → Yes starts a different world, and reloading doesn't bring the old one back (Task 10).
 - [ ] Ambient occlusion: inner corners, the bottoms of walls and cave edges are softly darkened, with no diagonal streaks across faces (Task 11).
 - [ ] Caves: dig down a few blocks in a hill to find cave systems; they never break the surface and never flood (Task 11).
-- [ ] Performance on an integrated-GPU laptop: F3 shows close to 60 FPS at render distance 6 while standing and while flying across terrain, with no regular hitches when new chunks stream in (about 410k triangles are loaded while moving; frustum culling draws only the visible ones). This could not be measured headless, where SwiftShader renders on the CPU (Task 11).
+- [ ] Performance on an integrated-GPU laptop: F3 shows close to 60 FPS at render distance 6 while standing and while flying across terrain, with no regular hitches when new chunks stream in (about 280k triangles are drawable within the render radius; frustum culling draws only the visible ones, and meshes beyond the radius are hidden). This could not be measured headless, where SwiftShader renders on the CPU (Task 11).

@@ -45,9 +45,9 @@ const WH = WORLD_HEIGHT;
 //   pad index = (pz * PX + px) * PY + py,  px = lx + 1, py = y + 1, pz = lz + 1
 // so the neighbor in direction (dx, dy, dz) is at i + dx*SX + dy*SY + dz*SZ.
 // The corner columns hold the diagonal neighbors that ambient occlusion samples.
-// A diagonal neighbor chunk that isn't loaded reads as AIR (no occlusion); World
-// meshes only once the 4 edge neighbors exist, and an edit at a chunk corner
-// also dirties the diagonal neighbor, so this only affects the outermost ring.
+// A diagonal neighbor chunk that isn't loaded reads as AIR (no occlusion). World
+// meshes once the 4 edge neighbors exist, then re-queues a chunk when its
+// diagonal neighbor generates (and on corner edits), so the AO is corrected.
 // ---------------------------------------------------------------------------
 const PX = CS + 2;
 const PY = WH + 2;

@@ -511,3 +511,26 @@ describe('controls', () => {
     expect(controls.isDown('KeyW')).toBe(false);
   });
 });
+
+describe('respawn ground snap', () => {
+  it('after a void respawn, stands on top of whatever now covers the spawn column', () => {
+    const { world, player, controls } = setup(1337);
+    const spawn = findSpawn(world);
+    const bx = Math.floor(spawn.x);
+    const bz = Math.floor(spawn.z);
+    const sy = world.heightAt(bx, bz) + 2;
+    player.setSpawn(spawn.x, sy, spawn.z);
+    // Build a 6-block pillar over the spawn column after the spawn point was set.
+    const top = world.heightAt(bx, bz);
+    for (let y = top + 1; y <= top + 6; y++) world.setBlock(bx, y, bz, 3);
+    player.teleport(spawn.x, -25, spawn.z);
+    controls.hold();
+    player.update(DT, true); // y < -20: respawn
+    for (let i = 0; i < 60; i++) player.update(DT, true);
+    const s = player.state;
+    expect(s.y).toBeGreaterThanOrEqual(top + 7 - 1e-3); // standing on the pillar, not inside it
+    for (let y = Math.floor(s.y); y < Math.ceil(s.y + 1.8); y++) {
+      expect(isSolid(world.getBlock(Math.floor(s.x), y, Math.floor(s.z)))).toBe(false);
+    }
+  });
+});

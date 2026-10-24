@@ -7,16 +7,15 @@
 import * as THREE from 'three';
 import {
   FOV, RENDER_DISTANCE, CHUNK_SIZE, MAX_PIXEL_RATIO, CAMERA_NEAR,
-  DAY_SKY_COLOR, FOG_NEAR_FACTOR, FOG_FAR_FACTOR,
+  DAY_SKY_COLOR, FOG_NEAR_FACTOR, FOG_FAR_FACTOR, CAMERA_FAR_MARGIN,
 } from '../config.js';
 
 // Render-side defaults; the sky module owns colors from Task 9 on. Tuning lives in config.js.
 const VIEW_RADIUS = RENDER_DISTANCE * CHUNK_SIZE; // blocks
 const FOG_NEAR = VIEW_RADIUS * FOG_NEAR_FACTOR;
 const FOG_FAR = VIEW_RADIUS * FOG_FAR_FACTOR;
-// Meshed chunks reach about (RENDER_DISTANCE + 1) chunks away horizontally, more along a
-// diagonal and with world height on top; 2x the padded radius leaves room for sun/moon quads.
-const CAMERA_FAR = (RENDER_DISTANCE + 2) * CHUNK_SIZE * 2;
+// Beyond fog far everything is drawn in the exact fog color, so the far plane sits just past it.
+const CAMERA_FAR = FOG_FAR + CAMERA_FAR_MARGIN;
 
 /**
  * Create the WebGL renderer, scene and first-person camera, and keep them sized to the window.

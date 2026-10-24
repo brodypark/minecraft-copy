@@ -14,7 +14,7 @@
 // brightness goes through Color.setRGB(..., SRGBColorSpace) for the same reason.
 
 import * as THREE from 'three';
-import { CHUNK_SIZE } from '../config.js';
+import { CHUNK_SIZE, SOLID_ALPHA_TEST, WATER_OPACITY } from '../config.js';
 
 const _color = new THREE.Color();
 
@@ -62,12 +62,12 @@ function colorsToLinear(src) {
  * @param {THREE.Texture} texture atlas texture (not disposed by this module)
  */
 export function createChunkMeshes(scene, texture) {
-  const solidMaterial = new THREE.MeshBasicMaterial({ map: texture, vertexColors: true, alphaTest: 0.5 });
+  const solidMaterial = new THREE.MeshBasicMaterial({ map: texture, vertexColors: true, alphaTest: SOLID_ALPHA_TEST });
   const waterMaterial = new THREE.MeshBasicMaterial({
     map: texture,
     vertexColors: true,
     transparent: true,
-    opacity: 0.7,
+    opacity: WATER_OPACITY,
     depthWrite: false,
     side: THREE.DoubleSide,
   });
@@ -75,6 +75,20 @@ export function createChunkMeshes(scene, texture) {
   /** @type {Map<string, { cx: number, cz: number, solid: THREE.Mesh|null, water: THREE.Mesh|null, triangles: number }>} */
   const entries = new Map();
   let triangles = 0;
+
+  // Meshes of chunks beyond the render radius stay alive until their chunk unloads (UNLOAD_DISTANCE),
+  // but are hidden so they cost no draw calls: RENDER_DISTANCE is the radius that gets drawn.
+  let focusCx = 0;
+  let focusCz = 0;
+  let visibleSq = Infinity;
+
+  function applyVisibility(entry) {
+    const dx = entry.cx - focusCx;
+    const dz = entry.cz - focusCz;
+    const visible = dx * dx + dz * dz <= visibleSq;
+    if (entry.solid !== null) entry.solid.visible = visible;
+    if (entry.water !== null) entry.water.visible = visible;
+  }
 
   /** New geometry for a non-empty mesher group (chunk-local positions, cull-ready bounds). */
   function buildGeometry(group) {
@@ -141,6 +155,7 @@ export function createChunkMeshes(scene, texture) {
     }
     entry.solid = updateMesh(entry.solid, data.solid, solidMaterial, cx, cz);
     entry.water = updateMesh(entry.water, data.water, waterMaterial, cx, cz);
+    applyVisibility(entry);
     const tris = (data.solid.indices.length + data.water.indices.length) / 3;
     triangles += tris - entry.triangles;
     entry.triangles = tris;
@@ -157,6 +172,20 @@ export function createChunkMeshes(scene, texture) {
     dropMesh(entry.water);
     triangles -= entry.triangles;
     entries.delete(key);
+  }
+
+  /**
+   * Show only chunks within `radius` chunks (circular) of chunk (cx, cz); hide the rest. Call it when
+   * the player enters a new chunk. Chunks set later follow the same rule.
+   * @param {number} cx
+   * @param {number} cz
+   * @param {number} radius in chunks
+   */
+  function setVisibleRadius(cx, cz, radius) {
+    focusCx = cx;
+    focusCz = cz;
+    visibleSq = radius * radius;
+    for (const entry of entries.values()) applyVisibility(entry);
   }
 
   /**
@@ -183,6 +212,7 @@ export function createChunkMeshes(scene, texture) {
     setChunk,
     removeChunk,
     setBrightness,
+    setVisibleRadius,
     dispose,
     /** @param {string} key @returns {boolean} true once setChunk ran for key (until removeChunk) */
     has: (key) => entries.has(key),

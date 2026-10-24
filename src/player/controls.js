@@ -13,8 +13,7 @@
 //   consumeDebugToggle()  -> F3 overlay (Task 8)
 //   consumeFlyToggle()    -> player.js
 
-const DOUBLE_TAP_MS = 300;  // two Space presses within this window toggle fly mode
-const WHEEL_STEP_MS = 50;   // wheel events closer than this to the last counted step are dropped
+import { DOUBLE_TAP_MS, WHEEL_STEP_MS } from '../config.js';
 
 const SLOT_CODES = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9'];
 

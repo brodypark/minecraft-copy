@@ -12,12 +12,12 @@
 //   9. Dev-only automation hook
 //
 // Frame order: dt -> input/player -> hotbar/F3 -> target + edits -> world streaming ->
-// unload meshes -> mesh budget -> sky -> debug stats -> render.
+// unload meshes -> mesh budget -> mesh visibility -> sky -> debug stats -> render.
 
 import * as THREE from 'three';
 import './ui/style.css';
 import {
-  GEN_DISTANCE, CHUNK_MESH_PER_FRAME, MAX_DT, REACH, DAY_START_TIME, DAY_LENGTH_SECONDS,
+  GEN_DISTANCE, RENDER_DISTANCE, CHUNK_MESH_PER_FRAME, MAX_DT, REACH, DAY_START_TIME, DAY_LENGTH_SECONDS,
 } from './config.js';
 import { B, HOTBAR_BLOCKS, getBlockDef } from './blocks.js';
 import { createRenderer } from './render/renderer.js';
@@ -194,6 +194,10 @@ function startNewWorld() {
 const timer = new THREE.Timer();
 timer.connect(document); // Page Visibility API: no huge dt after a tab switch
 
+// Chunk the player was in last frame: meshes beyond RENDER_DISTANCE of it are hidden.
+let viewCx = NaN;
+let viewCz = NaN;
+
 function frame(time) {
   // dt (raw delta feeds the FPS counter; the simulation uses the clamped one)
   timer.update(time);
@@ -233,6 +237,13 @@ function frame(time) {
 
   // Mesh budget (edited chunks bypass the limit inside consumeDirtyChunks)
   meshChunks(world.consumeDirtyChunks(CHUNK_MESH_PER_FRAME));
+  const pcx = toChunkCoord(player.state.x);
+  const pcz = toChunkCoord(player.state.z);
+  if (pcx !== viewCx || pcz !== viewCz) {
+    viewCx = pcx;
+    viewCz = pcz;
+    chunkMeshes.setVisibleRadius(pcx, pcz, RENDER_DISTANCE);
+  }
 
   // Sky: time advances only while playing; brightness dims the chunk materials
   if (!paused) timeOfDay = (timeOfDay + dt / DAY_LENGTH_SECONDS) % 1;

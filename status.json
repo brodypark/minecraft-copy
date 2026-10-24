@@ -2,7 +2,7 @@
   "manager": {
     "name": "Manager",
     "status": "working",
-    "task": "Group F: Save + Polish in parallel"
+    "task": "Fixing reviewer findings (6)"
   },
   "agents": [
     {
@@ -31,9 +31,9 @@
       "task": "Task 11 verified: AO, caves, memory bounded"
     },
     {
-      "name": "Player",
+      "name": "Reviewer",
       "status": "done",
-      "task": "Task 6 verified: walk/jump/fly/stream headless"
+      "task": "Review done: 6 findings reported"
     }
   ]
 }

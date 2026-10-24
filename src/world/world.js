@@ -309,6 +309,12 @@ export class World {
     if (clash !== undefined) this._unloadChunk(clash); // 32768 chunks away; see numKey
     this._chunks.set(nk, chunk);
     this._dirty.add(chunk);
+    // Meshing waits only for the 4 edge neighbors, so a loaded diagonal neighbor may already be meshed
+    // with this chunk read as AIR for ambient occlusion at its corner. Rebuild it with the real blocks.
+    this._markDirtyAt(cx - 1, cz - 1);
+    this._markDirtyAt(cx + 1, cz - 1);
+    this._markDirtyAt(cx - 1, cz + 1);
+    this._markDirtyAt(cx + 1, cz + 1);
     this._version++;
     return chunk;
   }

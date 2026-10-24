@@ -4,10 +4,7 @@
 // raycast result (or null). update() allocates nothing.
 
 import * as THREE from 'three';
-
-const OUTLINE_SIZE = 1.002;    // slightly larger than a block so the lines sit just outside its faces
-const OUTLINE_COLOR = 0x000000;
-const OUTLINE_OPACITY = 0.6;
+import { OUTLINE_SIZE, OUTLINE_COLOR, OUTLINE_OPACITY } from '../config.js';
 
 /**
  * Create the outline, add it to the scene (hidden until something is targeted).

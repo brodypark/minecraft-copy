@@ -18,7 +18,7 @@
 // save.player is null when the stored position was unusable (e.g. NaN): restore the world and its
 // edits anyway, but put the player at the normal spawn point.
 
-import { CHUNK_SIZE, WORLD_HEIGHT, DAY_START_TIME } from '../config.js';
+import { CHUNK_SIZE, WORLD_HEIGHT, DAY_START_TIME, AUTOSAVE_INTERVAL_MS } from '../config.js';
 import { B, HOTBAR_BLOCKS } from '../blocks.js';
 
 /** localStorage key that holds the save (one save slot). */
@@ -27,8 +27,8 @@ export const SAVE_KEY = 'voxel-sandbox-save';
 /** Save format version. parseSave rejects any other version. */
 export const SAVE_VERSION = 1;
 
-/** Milliseconds between autosaves. */
-export const AUTOSAVE_INTERVAL_MS = 10000;
+/** Milliseconds between autosaves (defined in config.js, re-exported for callers and tests). */
+export { AUTOSAVE_INTERVAL_MS };
 
 /** Largest absolute pitch kept by parseSave: 89 degrees, in radians (same limit as the player). */
 export const MAX_SAVED_PITCH = (89 * Math.PI) / 180;

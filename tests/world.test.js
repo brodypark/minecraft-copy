@@ -447,3 +447,29 @@ describe('World streaming', () => {
     }
   });
 });
+
+describe('World corner remesh (ambient occlusion)', () => {
+  it('generating a chunk re-dirties its loaded diagonal neighbors, so corner AO is rebuilt', () => {
+    const w = new World(SEED);
+    w.generateAround(8, 8, 2); // focus on chunk (0, 0)
+    // Mesh everything that is meshable now, so nothing is pending.
+    w.consumeDirtyChunks();
+    expect(w.consumeDirtyChunks()).toEqual([]);
+    // Chunk (1,0) was meshed (its 4 edge neighbors are inside radius 2), but its diagonal (2,1) is
+    // missing, so its corner AO read AIR there. Generating (2,1) must queue (1,0) for a rebuild.
+    expect(w.hasChunkData(2, 1)).toBe(false);
+    w.ensureChunk(2, 1);
+    const keys = keysOf(w.consumeDirtyChunks());
+    expect(keys).toContain('1,0');
+  });
+
+  it('does not queue already-meshed chunks that are not diagonal neighbors', () => {
+    const w = new World(SEED);
+    w.generateAround(8, 8, 2);
+    w.consumeDirtyChunks();
+    w.ensureChunk(2, 1);
+    const keys = keysOf(w.consumeDirtyChunks());
+    expect(keys).not.toContain('0,0');
+    expect(keys).not.toContain('-1,-1');
+  });
+});

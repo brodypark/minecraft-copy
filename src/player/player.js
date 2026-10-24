@@ -16,12 +16,10 @@
 //
 // Physics writes state.flying (landing ends flight), so always read it from state.
 
-import { PLAYER_EYE, MOUSE_SENSITIVITY, SEA_LEVEL } from '../config.js';
+import { PLAYER_EYE, MOUSE_SENSITIVITY, SEA_LEVEL, VOID_Y, PITCH_LIMIT } from '../config.js';
 import { createPlayerState, stepPlayer } from './physics.js';
 import { toChunkCoord } from '../world/chunk.js';
 
-const PITCH_LIMIT = (89 * Math.PI) / 180;
-const VOID_Y = -20;            // falling below this teleports the player to the spawn point
 const SPAWN_SEARCH_RADIUS = 256; // blocks; findSpawn gives up beyond this
 const SPAWN_TREE_CLEARANCE = 2;  // no tree root within this many blocks (leaf radius), so no canopy overhead
 const TWO_PI = Math.PI * 2;
@@ -87,6 +85,7 @@ export function findSpawn(world) {
 export function createPlayer({ camera, world, controls }) {
   const state = createPlayerState(0, 0, 0);
   const input = { forward: 0, strafe: 0, jump: false, sprint: false, down: false };
+  let snapToGround = false; // set by respawn(): re-place the feet once the spawn chunk has data
   const spawnPoint = { x: 0.5, y: 0, z: 0.5 };
 
   const player = {
@@ -151,6 +150,13 @@ export function createPlayer({ camera, world, controls }) {
       input.down = shift && state.flying;
 
       if (world.hasChunkData(toChunkCoord(state.x), toChunkCoord(state.z))) {
+        if (snapToGround) {
+          // The spawn column may have changed since the spawn point was set (the player built over it):
+          // stand on whatever is there now.
+          snapToGround = false;
+          const top = world.heightAt(Math.floor(state.x), Math.floor(state.z));
+          if (top >= 0) state.y = top + 2;
+        }
         stepPlayer(state, input, world, dt);
       }
 
@@ -172,10 +178,14 @@ export function createPlayer({ camera, world, controls }) {
     syncCamera();
   }
 
-  /** Teleport to the spawn point and leave fly mode. */
+  /**
+   * Teleport to the spawn point and leave fly mode. Once the spawn chunk has data, the next update
+   * re-places the feet 2 blocks above the column's current top block.
+   */
   function respawn() {
     state.flying = false;
     teleport(spawnPoint.x, spawnPoint.y, spawnPoint.z);
+    snapToGround = true;
   }
 
   /** Set the view direction (radians); pitch is clamped to +-89 degrees. */

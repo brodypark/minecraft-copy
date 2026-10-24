@@ -65,6 +65,9 @@ export const CAMERA_NEAR = 0.1;
 export const DAY_SKY_COLOR = 0x87b8ff;
 export const FOG_NEAR_FACTOR = 0.55;     // fog near = factor * RENDER_DISTANCE * CHUNK_SIZE
 export const FOG_FAR_FACTOR = 0.95;      // fog far  = factor * RENDER_DISTANCE * CHUNK_SIZE
+// Camera far plane = fog far + margin. Anything beyond fog far is drawn in the exact fog/sky color, so
+// clipping it is invisible; it saves fill and keeps fully fogged terrain from covering the sun and moon.
+export const CAMERA_FAR_MARGIN = 8;
 
 // Sky / day-night (used by src/render/sky.js). Time of day t is in [0, 1):
 // 0 = midnight, 0.25 = sunrise, 0.5 = noon, 0.75 = sunset; main.js advances it by dt / DAY_LENGTH_SECONDS.
@@ -79,13 +82,13 @@ export const DAY_BRIGHTNESS = 1.0;            // chunk material gray level in fu
 export const LIGHT_RAMP_LOW = -0.3;           // sun elevation where dawn light starts (and dusk light ends)
 export const LIGHT_RAMP_HIGH = 0.5;           // sun elevation where full daylight is reached
 export const SUN_ORBIT_TILT = 0.35;           // radians the sun's orbit leans toward +Z, so noon isn't straight up
-export const SUN_DISTANCE = 180;              // blocks from the camera (camera far plane is 256)
-export const SUN_SIZE = 30;                   // blocks, edge of the sun quad (glow included)
-export const MOON_SIZE = 20;                  // blocks, edge of the moon quad (glow included)
+export const SUN_DISTANCE = 80;               // blocks from the camera; must stay inside the camera far plane (~99)
+export const SUN_SIZE = 13;                   // blocks, edge of the sun quad (glow included)
+export const MOON_SIZE = 9;                   // blocks, edge of the moon quad (glow included)
 export const SKY_BODY_FADE_HIGH = 0.02;       // sun/moon direction y above which they are fully opaque
 export const SKY_BODY_FADE_LOW = -0.12;       // sun/moon direction y below which they are hidden
 export const STAR_COUNT = 400;
-export const STAR_DISTANCE = 190;             // blocks from the camera
+export const STAR_DISTANCE = 85;              // blocks from the camera (inside the far plane)
 export const STAR_SIZE = 2;                   // CSS px (no size attenuation)
 export const STAR_MAX_OPACITY = 0.8;
 export const STAR_FADE_LOW = -0.25;           // sun elevation below which stars are fully visible
@@ -112,3 +115,16 @@ export const CAVE_MIN_Y = 5;
 export const CAVE_SURFACE_GAP = 5;        // cave cells satisfy y <= surface - 5 (own and 4 neighbor columns)
 export const CAVE_TAPER = 3;              // blocks
 export const CAVE_TAPER_STEP = 0.08;      // threshold increase per block of taper
+
+// Player, controls, interaction, materials, save (gathered here in the final review so config.js
+// holds every tunable)
+export const VOID_Y = -20;               // falling below this teleports the player to the spawn point
+export const PITCH_LIMIT = (89 * Math.PI) / 180; // look up/down clamp, radians
+export const DOUBLE_TAP_MS = 300;        // two Space presses within this window toggle fly mode
+export const WHEEL_STEP_MS = 50;         // same-direction wheel events closer than this count once (trackpads)
+export const OUTLINE_SIZE = 1.002;       // target outline cube edge: just outside the block faces
+export const OUTLINE_COLOR = 0x000000;
+export const OUTLINE_OPACITY = 0.6;
+export const SOLID_ALPHA_TEST = 0.5;     // solid material cutoff: leaves/glass holes are alpha 0
+export const WATER_OPACITY = 0.7;
+export const AUTOSAVE_INTERVAL_MS = 10000;
