@@ -16,3 +16,11 @@ These need a human to verify by running the game; they are not covered by automa
 - [ ] Tab switch / alt-tab while holding W: on return the player isn't still walking and there is no big jump in position (Task 6).
 - [ ] Fog hides chunks popping in at the edge of the view while walking or flying (Task 6).
 - [ ] Walking and flying fast across chunk borders never stutters, falls through the ground, or shows holes along borders (Task 6).
+- [ ] Block editing: left click breaks the targeted block instantly; right click places the selected block on the targeted face; you can't place a block inside yourself; bedrock can't be broken; the outline hugs the targeted block and disappears when nothing is in reach; edits at chunk borders leave no holes (Task 7).
+- [ ] Hotbar: all 9 icons are recognizable, crisp and seam-free (including leaves and glass); 1-9 and the mouse wheel change the selection; the selected slot is clearly highlighted and the block name fades out (Task 8).
+- [ ] Crosshair stays visible against bright sky and in dark places (Task 8).
+- [ ] Pause menu: Esc shows it; "Click to play" resumes; "New World" asks for confirmation; "Cancel" backs out; "Yes, new world" starts a different world (Task 8).
+- [ ] F3 overlay: toggles on and off; FPS, XYZ, chunk, facing, time, chunk counts, triangles and seed look plausible and update while moving (Task 8).
+- [ ] Layout holds in narrow and short windows (the hotbar scales down; the pause menu scrolls if needed) (Task 8).
+- [ ] Day/night (a full cycle takes 10 minutes; to skip ahead in dev, run `__game.setTimeOfDay(0.74)` in the console): the sun rises in the east and sets in the west with an orange-pink sky (judge whether the sunset tint is too strong); night is dark blue with stars and a cratered moon; terrain dims at night; hills hide the sun and moon (Task 9).
+- [ ] Underwater: blue-green, short fog under water that clears when surfacing (Task 9).

@@ -65,3 +65,31 @@ export const CAMERA_NEAR = 0.1;
 export const DAY_SKY_COLOR = 0x87b8ff;
 export const FOG_NEAR_FACTOR = 0.55;     // fog near = factor * RENDER_DISTANCE * CHUNK_SIZE
 export const FOG_FAR_FACTOR = 0.95;      // fog far  = factor * RENDER_DISTANCE * CHUNK_SIZE
+
+// Sky / day-night (used by src/render/sky.js). Time of day t is in [0, 1):
+// 0 = midnight, 0.25 = sunrise, 0.5 = noon, 0.75 = sunset; main.js advances it by dt / DAY_LENGTH_SECONDS.
+// "Sun elevation" below means sin(2*pi*(t - 0.25)): -1 at midnight, 0 at sunrise/sunset, 1 at noon.
+export const DAY_START_TIME = 0.3;            // the game starts in the morning, shortly after sunrise
+export const NIGHT_SKY_COLOR = 0x0b1026;      // sRGB; DAY_SKY_COLOR (above) is the noon sky
+export const SUNSET_SKY_COLOR = 0xff8c5f;     // sRGB, orange-pink tint around sunrise and sunset
+export const SUNSET_TINT_STRENGTH = 0.75;     // blend toward SUNSET_SKY_COLOR when the sun is on the horizon
+export const SUNSET_TINT_WIDTH = 0.3;         // sun elevation (+-) at which the sunset tint has faded out
+export const NIGHT_BRIGHTNESS = 0.25;         // chunk material gray level through the night
+export const DAY_BRIGHTNESS = 1.0;            // chunk material gray level in full daylight
+export const LIGHT_RAMP_LOW = -0.3;           // sun elevation where dawn light starts (and dusk light ends)
+export const LIGHT_RAMP_HIGH = 0.5;           // sun elevation where full daylight is reached
+export const SUN_ORBIT_TILT = 0.35;           // radians the sun's orbit leans toward +Z, so noon isn't straight up
+export const SUN_DISTANCE = 180;              // blocks from the camera (camera far plane is 256)
+export const SUN_SIZE = 30;                   // blocks, edge of the sun quad (glow included)
+export const MOON_SIZE = 20;                  // blocks, edge of the moon quad (glow included)
+export const SKY_BODY_FADE_HIGH = 0.02;       // sun/moon direction y above which they are fully opaque
+export const SKY_BODY_FADE_LOW = -0.12;       // sun/moon direction y below which they are hidden
+export const STAR_COUNT = 400;
+export const STAR_DISTANCE = 190;             // blocks from the camera
+export const STAR_SIZE = 2;                   // CSS px (no size attenuation)
+export const STAR_MAX_OPACITY = 0.8;
+export const STAR_FADE_LOW = -0.25;           // sun elevation below which stars are fully visible
+export const STAR_FADE_HIGH = 0;              // sun elevation above which stars are gone
+export const UNDERWATER_FOG_COLOR = 0x1a5a6a; // sRGB deep blue-green, multiplied by brightness (dark at night)
+export const UNDERWATER_FOG_NEAR = 0.5;       // blocks
+export const UNDERWATER_FOG_FAR = 14;         // blocks

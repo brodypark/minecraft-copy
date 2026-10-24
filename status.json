@@ -2,23 +2,23 @@
   "manager": {
     "name": "Manager",
     "status": "working",
-    "task": "Group D: Player integration running"
+    "task": "Wiring Group E (raycast, HUD, sky) into main.js"
   },
   "agents": [
     {
-      "name": "Scaffold",
+      "name": "Raycast",
       "status": "done",
-      "task": "Task 1 verified: test + build pass"
+      "task": "Task 7 verified: break/place work in game"
     },
     {
-      "name": "Atlas",
+      "name": "HUD",
       "status": "done",
-      "task": "Task 2 verified: 13 tiles, tests pass, atlas inspected"
+      "task": "Task 8 verified: HUD, hotbar, F3 in game"
     },
     {
-      "name": "Terrain",
+      "name": "Sky",
       "status": "done",
-      "task": "Task 3 verified: 41 tests, 13x13 gen 17 ms"
+      "task": "Task 9 verified: day/night, underwater in game"
     },
     {
       "name": "Physics",

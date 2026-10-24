@@ -282,15 +282,15 @@ Parallel groups run in order. Tasks within a group can run at the same time. Eac
 
 ### Group E (parallel; manager wires `main.js` after the group)
 
-- [ ] **7. Raycast and block editing** — files: `src/world/raycast.js`, `tests/raycast.test.js`, edit logic exported from `src/player/player.js` or a new `src/player/interaction.js`
+- [x] **7. Raycast and block editing** — files: `src/world/raycast.js`, `tests/raycast.test.js`, edit logic exported from `src/player/player.js` or a new `src/player/interaction.js`
   - DDA raycast, break/place rules, target outline mesh factory, selected-slot input. Remesh edited chunks immediately.
   - Acceptance: raycast tests pass; placing/breaking logic has unit tests for "can't place inside player", "can't break bedrock", "ray ignores water".
 
-- [ ] **8. HUD, hotbar, pause menu, debug overlay** — files: `src/ui/hud.js`, `src/ui/hotbar.js`, `src/ui/debug.js`, `src/ui/style.css`
+- [x] **8. HUD, hotbar, pause menu, debug overlay** — files: `src/ui/hud.js`, `src/ui/hotbar.js`, `src/ui/debug.js`, `src/ui/style.css`
   - Per section 7 HUD. Pause overlay with controls list. Isometric cube icons from the atlas. F3 overlay fed by a stats object the manager passes in.
   - Acceptance: build passes; modules export `createHud`, `createHotbar`, `createDebugOverlay` with documented parameters; icons render for all 9 placeable blocks (visual check logged in `MANUAL_CHECKS.md`).
 
-- [ ] **9. Sky, day/night, fog, water look** — files: `src/render/sky.js`
+- [x] **9. Sky, day/night, fog, water look** — files: `src/render/sky.js`
   - `createSky(scene, renderer)` returning `update(timeOfDay, playerPos)`. Handles sky/fog colors, sun and moon, and exposes a `brightness` value (0.25-1.0) the manager applies to chunk materials. Underwater tint when the camera is inside water.
   - Acceptance: build passes; unit test for the color/brightness curve (continuous, correct at dawn/noon/dusk/midnight).
 
